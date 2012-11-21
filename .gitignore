@@ -1,0 +1,11 @@
+*.dep
+*.ewd
+*.ewp
+*.aps
+*.aws
+/btn/Debug
+/btn/settings
+/btn/Release
+/head/Debug
+/head/settings
+/head/Release
