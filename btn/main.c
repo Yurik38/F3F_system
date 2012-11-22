@@ -1,5 +1,5 @@
 /*
-Кварц - 11059200 Hz
+    Quartz - 11059200 Hz
 Fuses
         OSCCAL  = AF, AE, A9, AB
         BLEV    = 0
@@ -17,21 +17,21 @@ Fuses
 */
 
 #include "cpu.h"
-#include "event.h"
-#include "UART.h"
+#include "../common/event.h"
+#include "../common/UART.h"
 
-/* Код команды в кнопку */
+/* command to button */
 #define		START_ROUND	0x01
 #define		CANSEL		0x02
 #define		NUM_PACK_Q	0x03
 #define		BAT_VOLT_Q	0x04
 #define		SOUND		0x05
 #define		PARAM		0x06
-#define 	READY_TIME_OUT	0x09
+#define 	READY_TIME_OUT	0x07
 #define		STOP		0x0A
 
 
-/* Код ответа из кнопки */
+/* answer from button */
 #define		TIME_STAMP	0x10
 #define		NUM_PACKET	0x11
 #define		VOLTAGE		0x12
@@ -44,7 +44,7 @@ Fuses
 #define		INT_POW		6
 #define 	CLK_PER_SECOND	100
 
-#define		_mS10		~(13824 - 1)  //прескаллер 8
+#define		_mS10		~(13824 - 1)  //prescaller 8
 
 /*#define		_LedOn(p)	PORTD &= ~(1 << p)
 #define		_LedOff(p)	PORTD |= (1 << p)*/
@@ -70,7 +70,7 @@ typedef enum
 typedef enum
 {
   PRESS_KEY,
-  PACKET_READY,
+  BASE_OUT,
   TOUR_GO_1,
   TOUR_GO_2,
   TOUR_GO_3,
@@ -97,9 +97,10 @@ __flash FUNC FuncTbl[] = {
   BatVolt,
   Sound,
   ReadyTimeOut
-};    
+};
 
-uchar volatile	Flags;			//Флаги
+
+uchar volatile	Flags;
 uint 		Result;
 uint		SendResult;
 uint		VoltageSum;
@@ -114,7 +115,7 @@ uchar		CntRxPacket;
 uchar		CntTxPacket;
 
 /************************************************************************/
-/*	П Р Е Р Ы В А Н И Я						*/
+/*	i n t e r r u p t s						*/
 /************************************************************************/
 
 #pragma vector = TIMER1_OVF_vect
@@ -122,8 +123,9 @@ __interrupt  void TIMER1_OVF_interrupt(void)
 {
 //  uchar i;
   TCNT1 += _mS10;
-  Result++;			//результат всегда инкрементируется.
-  //Обрабатываем клавиатуру
+  if (_CheckF(TOUR_GO_1)) Result++;
+
+  //Check button
   if ((PIND_Bit2) && (UnsensTmr))
     if (UnsensTmr == 1)
     {
@@ -134,7 +136,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   else UnsensTmr--;
   
   if(Delay1) --Delay1;
-  //обработка звука
+  //sound controll
   if (SndTime) SndTime--;
   else if (Ring)
   {
@@ -168,7 +170,7 @@ __interrupt  void INT0_interrupt(void)
 }
 
 /************************************************************************/
-/*	Ф У Н К Ц И И   И Н И Ц И А Л И З А Ц И И			*/
+/*	INIT FUNCTION
 /************************************************************************/
 void InitCPU(void)
 {
@@ -185,7 +187,7 @@ void InitCPU(void)
 void InitTimers(void)
 {
   TIMSK = (1<<TOIE1);
-  TCCR1B = 0x02;    //Прескаллер 8
+  TCCR1B = 0x02;    //prescaller 8
   TCNT1 = _mS10;
 
 //  TCCR1A = 0x00;
@@ -200,7 +202,7 @@ void InitADC(void)
 }
 
 /************************************************************************/
-/*	Ф У Н К Ц И И   						*/
+/*	F U N C T I O N
 /************************************************************************/
 inline void SndOnShort(void)
 {
@@ -233,8 +235,11 @@ void Dummy(uchar a)
 void StartRound(uchar a)
 {
   _ClrF(TOUR_GO_1);
+  _ClrF(BASE_OUT);
   GIFR |= (1 << INTF0);
   GICR |= (1 << INT0);
+  Result = 0;
+  SendResult = 0;
   SndOnLong();
 }
 
@@ -242,6 +247,7 @@ void StartRound(uchar a)
 void Cancel(uchar a)
 {
   _ClrF(TOUR_GO_1);
+  _ClrF(BASE_OUT);
   GICR &= ~(1 << INT0);
 }
 
@@ -286,14 +292,8 @@ void ReadyTimeOut(uchar a)
 
 void main(void)
 {
-/*  uchar crc, cnt;
-  uchar rx_byte, tx_cnt;
-  uchar parse_state;
-  uchar buf[sizeof(TPACKET)];*/
   uint	tmp2;
   T_EVENT *p_event;
-  
-  
   
   InitCPU();
   InitTimers();
@@ -312,22 +312,26 @@ void main(void)
       _ClrF(PRESS_KEY);
       SndOnShort();
       if (_CheckF(TOUR_GO_1));
-      else 
+      else
       {
-        _SetF(TOUR_GO_1);
-        _CLI();
-        Result = 0;
-        SendResult = 0;
-        _SEI();
+        if (_CheckF(BASE_OUT))
+        {
+          _SetF(TOUR_GO_1);
+          _CLI();
+          Result = 0;
+          SendResult = 0;
+          _SEI();
+        }
+        else _SetF(BASE_OUT);
       }
       PostEvent(TIME_STAMP, SendResult, MAIN_DEV);
-  }
+    }
     p_event = GetPacket();
-	if (p_event != NULL)
-	  PostEvent(p_event->cmd, p_event->param0, p_event->addr);
+    if (p_event != NULL)
+      PostEvent(p_event->cmd, p_event->param0, p_event->addr);
 
     
-	p_event = GetEvent();
+    p_event = GetEvent();
     if (p_event != NULL)
     {
       if (p_event->addr == MAIN_DEV)
@@ -335,7 +339,7 @@ void main(void)
         //if event for main device - send it and mark as handled
         SendPacket(p_event);
       }
-      else 
+      else
       {
         if (p_event->cmd < CMD_NUM) FuncTbl[p_event->cmd](p_event->param0);
       }
@@ -348,7 +352,6 @@ void main(void)
       VoltageSum = (tmp2 >> INT_POW) + ADCH;               // VoltageSum * 63 / 64 + ADC
       Voltage = (uchar)((VoltageSum + (1 << (INT_POW - 1))) >> INT_POW);
     }
-      
   }
 }
 
