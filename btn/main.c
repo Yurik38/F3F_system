@@ -21,20 +21,20 @@ Fuses
 #include "../common/UART.h"
 
 /* command to button */
-#define		START_ROUND	0x01
+/*#define		START_ROUND	0x01
 #define		CANSEL		0x02
 #define		NUM_PACK_Q	0x03
 #define		BAT_VOLT_Q	0x04
 #define		SOUND		0x05
 #define		PARAM		0x06
 #define 	READY_TIME_OUT	0x07
-#define		STOP		0x0A
+#define		STOP		0x0A*/
 
 
 /* answer from button */
-#define		TIME_STAMP	0x10
+/*#define		TIME_STAMP	0x10
 #define		NUM_PACKET	0x11
-#define		VOLTAGE		0x12
+#define		VOLTAGE		0x12*/
 
 //#define		TX_BUF_SIZE	16
 #define		RED		6
@@ -170,7 +170,7 @@ __interrupt  void INT0_interrupt(void)
 }
 
 /************************************************************************/
-/*	INIT FUNCTION
+/*	INIT FUNCTION	*/
 /************************************************************************/
 void InitCPU(void)
 {
@@ -202,7 +202,7 @@ void InitADC(void)
 }
 
 /************************************************************************/
-/*	F U N C T I O N
+/*	F U N C T I O N		*/
 /************************************************************************/
 inline void SndOnShort(void)
 {

@@ -1,4 +1,8 @@
-#include "cpu.h"
+#ifdef _MAIN
+#include "../head/cpu.h"
+#else 
+#include "../btn/cpu.h"
+#endif
 #include "event.h"
 #include "UART.h"
 
@@ -154,7 +158,9 @@ uchar GetByte(uchar *a)
 void SendPacket(T_EVENT* event)
 {
 	uchar i, crc;
-	uchar addr;
+#ifdef _MAIN
+    uchar addr;
+#endif
 	uchar *ptr = (uchar*)event;
 	uchar *p_id;
 
