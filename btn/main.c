@@ -249,6 +249,7 @@ void Cancel(uchar a)
   _ClrF(TOUR_GO_1);
   _ClrF(BASE_OUT);
   GICR &= ~(1 << INT0);
+  SndOnShort();
 }
 
 /************************************************************************/
@@ -282,7 +283,6 @@ void ReadyTimeOut(uchar a)
   _CLI();
   Result = 0;
   _SEI();
-  SndOnLong();
 }
 
 
