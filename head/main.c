@@ -21,8 +21,8 @@ Fuses
 #include <stdio.h>
 #include <string.h>
 //#include "rf12.h"
-#include "event.h"
-#include "UART.h"
+#include "../common/event.h"
+#include "../common/UART.h"
 
 #define		MSK_ST_TOUR	0x80
 #define		MSK_NEXT	0x20
@@ -56,7 +56,8 @@ Fuses
 typedef enum
 {
   INIT_ST,
-  CHECK_ST,
+  CHECK_START_ST,
+  CHECK_TURN_ST,
   IDLE_ST,
   READY_TIME_ST,
   TIME_OUT_START_ST,
@@ -126,7 +127,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_CANCEL; CurCode &= ~MSK_CANCEL;}
 
-  if (!(PINC & 0x80)) 		//press but  4 Next
+  if (!(PINC & 0x10)) 		//press but  4 Next
   {
     if ((CurCode ^ TmpCode) & MSK_NEXT)
     {
@@ -138,7 +139,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_NEXT; CurCode &= ~MSK_NEXT;}
 
-  if (!(PINC & 0x10)) 		//press but 1 Prev
+  if (!(PINC & 0x80)) 		//press but 1 Prev
   {
     if ((CurCode ^ TmpCode) & MSK_PREV)
     {
@@ -379,18 +380,48 @@ void main(void)
     {
       case INIT_ST:				//init
         ClrAllDisp();
-        WriteStr(" Пульт 1 *F3F*");
+        WriteStr(" Система *F3F*");
         SetCursDisp(1, 0);
         WriteStr(" Всего пультов 0");
-        StateDev = IDLE_ST;
+        StateDev = CHECK_START_ST;
         Flags = 0;
         LapNum = 0;
         LapResult = Results;
         memset(Results, 0, sizeof(Results));
+        ReadyTimer = 0;
         break;
-      case CHECK_ST:
+        
+      case CHECK_START_ST:
+        if (ReadyTimer == 0)
+        {
+          ReadyTimer = 250;
+          PostEvent(BAT_VOLT_Q, 0, START_BTN);
+        }
+        if (p_event == NULL) break;
+        if (p_event->cmd == VOLTAGE)	//answer from point
+        {
+          StateDev = CHECK_TURN_ST;
+          SetCursDisp(1, 15);
+          putchar('1');	
+          ReadyTimer = 0;
+        }
         break;
-
+          
+      case CHECK_TURN_ST:
+        if (ReadyTimer == 0)
+        {
+          ReadyTimer = 250;
+          PostEvent(BAT_VOLT_Q, 0, TURN_BTN);
+        }
+        if (p_event == NULL) break;
+        if (p_event->cmd == VOLTAGE)	//answer from point
+        {
+          StateDev = IDLE_ST;
+          SetCursDisp(1, 1);
+          WriteStr("Взлёт разрешен ");	
+        }
+        break;
+        
       case IDLE_ST:				//ready to begin
         if (p_event == NULL) break;
         if (p_event->cmd == START_ROUND)	//event arrived

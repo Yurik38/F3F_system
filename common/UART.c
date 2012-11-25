@@ -171,8 +171,8 @@ void SendPacket(T_EVENT* event)
 	addr = event->addr;
 	//++++
 		//for debug only!! always CS = 1
-		SetCS(1);
-	//	SetCS(addr);
+	//	SetCS(1);
+	SetCS(addr);
 
 	Morgun(addr - 1, &LedTime[addr - 1]);
 	p_id = &TxID[addr-1];
