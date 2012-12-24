@@ -8,7 +8,7 @@
 #define		BAT_VOLT_Q	0x04
 #define		SOUND		0x05
 #define 	READY_TIME_OUT	0x06
-#define		PARAM		0x07
+#define		INFO_Q		0x07
 /*Internal command and*/
 #define		NEXT		0x08
 #define		PREV		0x09
@@ -17,6 +17,8 @@
 #define		TIME_STAMP	0x10
 #define		NUM_PACKET	0x11
 #define		VOLTAGE		0x12
+#define		LETTER		0x13
+#define		END_CHAR	0x14
 
 typedef struct
 {
