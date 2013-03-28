@@ -22,12 +22,14 @@ Fuses
 #include <string.h>
 //#include "rf12.h"
 #include "../common/event.h"
-#include "../common/UART.h"
+//#include "../common/UART.h"
 
 #define		MSK_ST_TOUR	0x80
 #define		MSK_NEXT	0x20
 #define		MSK_PREV	0x40
 #define		MSK_CANCEL	0x10
+#define		MSK_ST_BTN	0x08
+#define		MSK_TURN_BTN	0x04
 
 #define		SND_SHORT		0x00
 #define		SND_LONG		0x1F
@@ -56,8 +58,8 @@ Fuses
 typedef enum
 {
   INIT_ST,
-  CHECK_START_ST,
-  CHECK_TURN_ST,
+  /*CHECK_START_ST,
+  CHECK_TURN_ST,*/
   IDLE_ST,
   READY_TIME_ST,
   TIME_OUT_START_ST,
@@ -71,7 +73,8 @@ typedef enum
   UPDATE_DISP_TIME,
   UPDATE_DISP_LAP,
   TOUR_GO,
-  OUT_OF_BASE
+  OUT_OF_BASE,
+  EN_ST_BTN
 }FLAGS;
 
 uchar volatile	Flags;
@@ -119,7 +122,6 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   {
     if ((CurCode ^ TmpCode) & MSK_CANCEL)
     {
-      //      _SndOnShort;
       CurCode |= MSK_CANCEL;
       ScanCode |= MSK_CANCEL;
     }
@@ -127,35 +129,32 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_CANCEL; CurCode &= ~MSK_CANCEL;}
 
-  if (!(PINC & 0x10)) 		//press but  4 Next
+  if (!(PINC & 0x10)) 		//press turn button
   {
-    if ((CurCode ^ TmpCode) & MSK_NEXT)
+    if ((CurCode ^ TmpCode) & MSK_TURN_BTN)
     {
-      //      _SndOnShort;
-      CurCode |= MSK_NEXT;
-      ScanCode |= MSK_NEXT;
+      CurCode |= MSK_TURN_BTN;
+      ScanCode |= MSK_TURN_BTN;
     }
-    else TmpCode |= MSK_NEXT;
+    else TmpCode |= MSK_TURN_BTN;
   }
-  else {TmpCode &= ~MSK_NEXT; CurCode &= ~MSK_NEXT;}
+  else {TmpCode &= ~MSK_TURN_BTN; CurCode &= ~MSK_TURN_BTN;}
 
-  if (!(PINC & 0x80)) 		//press but 1 Prev
+  if (!(PINC & 0x80)) 		//press start button
   {
-    if ((CurCode ^ TmpCode) & MSK_PREV)
+    if ((CurCode ^ TmpCode) & MSK_ST_BTN)
     {
-      //      _SndOnShort;
-      CurCode |= MSK_PREV;
-      ScanCode |= MSK_PREV;
+      CurCode |= MSK_ST_BTN;
+      ScanCode |= MSK_ST_BTN;
     }
-    else TmpCode |= MSK_PREV;
+    else TmpCode |= MSK_ST_BTN;
   }
-  else {TmpCode &= ~MSK_PREV; CurCode &= ~MSK_PREV;}
+  else {TmpCode &= ~MSK_ST_BTN; CurCode &= ~MSK_ST_BTN;}
 
   if (!(PINC & 0x40)) 		//press but 3 StartTour
   {
     if ((CurCode ^ TmpCode) & MSK_ST_TOUR)
     {
-      //      _SndOnShort;
       CurCode |= MSK_ST_TOUR;
       ScanCode |= MSK_ST_TOUR;
     }
@@ -277,8 +276,8 @@ void KeyHandler(void)
   if (ScanCode & MSK_ST_TOUR)				//tour's begin
   {
     PostEvent(START_ROUND, 0, MAIN_DEV);
-    PostEvent(START_ROUND, 0, TURN_BTN);
-    PostEvent(START_ROUND, 0, START_BTN);
+//    PostEvent(START_ROUND, 0, TURN_BTN);
+//    PostEvent(START_ROUND, 0, START_BTN);
     ScanCode &= ~MSK_ST_TOUR;
   }
 
@@ -297,9 +296,21 @@ void KeyHandler(void)
   if (ScanCode & MSK_CANCEL)				//but reset
   {
     PostEvent(CANCEL, 0, MAIN_DEV);
-    PostEvent(CANCEL, 0, TURN_BTN);
-    PostEvent(CANCEL, 0, START_BTN);
+//    PostEvent(CANCEL, 0, TURN_BTN);
+//    PostEvent(CANCEL, 0, START_BTN);
     ScanCode &= ~MSK_CANCEL;
+  }
+
+  if (ScanCode & MSK_ST_BTN)				//but start point
+  {
+    if (Flags & (1 << EN_ST_BTN)) PostEvent(TIME_STAMP, Result, MAIN_DEV);
+    ScanCode &= ~MSK_ST_BTN;
+  }
+
+  if (ScanCode & MSK_TURN_BTN)				//but turn point
+  {
+    if (!(Flags & (1 << EN_ST_BTN))) PostEvent(TIME_STAMP, Result, MAIN_DEV);
+    ScanCode &= ~MSK_TURN_BTN;
   }
 }
 
@@ -382,16 +393,18 @@ void main(void)
         ClrAllDisp();
         WriteStr(" Система *F3F*");
         SetCursDisp(1, 0);
-        WriteStr(" Всего пультов 0");
-        StateDev = CHECK_START_ST;
-        Flags = 0;
+/*        WriteStr(" Всего пультов 0");
+        StateDev = CHECK_START_ST;*/
+        WriteStr("Взлёт разрешен ");
+        StateDev = IDLE_ST;
+        Flags = (1 << EN_ST_BTN);
         LapNum = 0;
         LapResult = Results;
         memset(Results, 0, sizeof(Results));
         ReadyTimer = 0;
         break;
         
-      case CHECK_START_ST:
+/*      case CHECK_START_ST:
         if (ReadyTimer == 0)
         {
           ReadyTimer = 250;
@@ -420,7 +433,7 @@ void main(void)
           SetCursDisp(1, 1);
           WriteStr("Взлёт разрешен ");	
         }
-        break;
+        break;*/
         
       case IDLE_ST:				//ready to begin
         if (p_event == NULL) break;
@@ -447,7 +460,8 @@ void main(void)
           if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
           if (ReadyTimer == 0)
           {
-            PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart tour. send event to start point
+            //PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart tour. send event to start point
+            Flags |= (1 << EN_ST_BTN);
             ClrAllDisp();
             Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
             StateDev = TIME_OUT_START_ST;	//go to new state
@@ -464,13 +478,14 @@ void main(void)
             SndOn(SND_LONG);
             ReadyTimer = 150;				//1.5 sec no reaction on event
             StateDev = TOUR_ST;				//tour running
-            //Result = 0;
-            //speed = Result;
-            speed = p_event->param0;
+            Result = 0;
+            speed = Result;
+            //speed = p_event->param0;
             _CLI();
             Result = p_event->param0;
             _SEI();
-            PostEvent(SOUND, 2, TURN_BTN);
+            //PostEvent(SOUND, 2, TURN_BTN);
+            Flags &= ~(1 << EN_ST_BTN);
           }
           else 		//out of base wait event from start point again
           {
@@ -498,7 +513,8 @@ void main(void)
             //_CLI();
             //Result = p_event->param0;
             //_SEI();*/
-            PostEvent(SOUND, 2, TURN_BTN);
+//            PostEvent(SOUND, 2, TURN_BTN);
+            Flags &= ~(1 << EN_ST_BTN);
           }
           else
           {
@@ -538,10 +554,10 @@ void main(void)
             *LapResult = p_event->param0;		//save time of pass
             Flags &= ~(1 << TOUR_GO);		//clear tour flag and issue event of finish
             //PostEvent(STOP, 0, MAIN_DEV);
-            PostEvent(CANCEL, 0, START_BTN);
+/*            PostEvent(CANCEL, 0, START_BTN);
             PostEvent(SOUND, 3, START_BTN);
             PostEvent(CANCEL, 0, TURN_BTN);
-            PostEvent(SOUND, 3, TURN_BTN);
+            PostEvent(SOUND, 3, TURN_BTN);*/
             SndOnRing(40);
             StateDev = STOP_ST;
             UpdateDispTime(*LapResult);
@@ -555,12 +571,15 @@ void main(void)
               _CLI();
               Result = p_event->param0;		//update sown time
               _SEI();
-              PostEvent(SOUND, 1, TURN_BTN);
+//              PostEvent(SOUND, 1, TURN_BTN);
+              Flags &= ~(1 << EN_ST_BTN);
+
             }
             else				//turn on "turn point" - sound for "start point"
             {
               *LapResult = Result;		//save time of pass from main device. turn button result omited
-              PostEvent(SOUND, 1, START_BTN);
+              //PostEvent(SOUND, 1, START_BTN);
+              Flags |= (1 << EN_ST_BTN);
             }
             if (LapNum == 8) SndOn(SND_SHORT_LONG);		//penultimate pass
             else SndOn(SND_SHORT);
