@@ -22,7 +22,7 @@ Fuses
 #include <string.h>
 //#include "rf12.h"
 #include "../common/event.h"
-//#include "../common/UART.h"
+#include "../common/UART.h"
 
 #define		MSK_ST_TOUR	0x80
 #define		MSK_NEXT	0x20
@@ -35,7 +35,6 @@ Fuses
 #define		SND_LONG		0x1F
 #define		SND_SHORT_SHORT	0x02
 #define		SND_SHORT_LONG	0x3E
-
 
 
 
@@ -352,7 +351,7 @@ void main(void)
   InitCPU();
   InitTimers();
   InitEventList();
-  InitUART(1152);
+//  InitUART(1152);
   //  _UART_RX_EN;
   _SEI();
   LastSecondSnd = 5;
@@ -369,9 +368,9 @@ void main(void)
   {
     KeyHandler();
 
-    p_event = GetPacket();
+/*    p_event = GetPacket();
     if (p_event != NULL)
-      PostEvent(p_event->cmd, p_event->param0, p_event->addr);
+      PostEvent(p_event->cmd, p_event->param0, p_event->addr);*/
 
     p_event = GetEvent();
     if (p_event != NULL)
@@ -379,7 +378,7 @@ void main(void)
       if ((p_event->addr > 0) && (p_event->addr < 5))
       {
         //if event not for main device - send it and mark as handled
-        SendPacket(p_event);
+        //SendPacket(p_event);
         p_event = NULL;
       }
     }
