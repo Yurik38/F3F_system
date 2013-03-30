@@ -3,11 +3,11 @@
 #include "../common/unsigned.h"
 #include "../common/my_macro.h"
 #include <ina90.h>
-#include <iom32.h>
-//#include <iom16.h>
+//#include <iom32.h>
+#include <iom16.h>
 
-#define CPU_FREQ	11059200
-//#define CPU_FREQ	16000000
+//#define CPU_FREQ	11059200
+#define CPU_FREQ	16000000
 
 #endif
 

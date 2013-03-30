@@ -38,7 +38,7 @@ Fuses
 
 
 
-#define		_mS10		~(432 - 1)  //Prescaller 256
+#define		_mS10		~(CPU_FREQ/256/100 - 1)  //Prescaller 256
 
 
 /*#define		LEDPORT		PORTC
@@ -47,8 +47,11 @@ Fuses
 #define		_LedOffAll	LEDPORT |= 0x0F*/
 
 
-#define		_SndOn		PORTD &= ~(0x0C)
-#define		_SndOff		PORTD |= (0x0C)
+#define		_SndOn		PORTD_Bit2 = 0; PORTB_Bit1 = 1;
+#define		_SndOff		PORTD_Bit2 = 1; PORTB_Bit1 = 0;
+
+/*#define		_SndOn		PORTD &= ~(0x0C)
+#define		_SndOff		PORTD |= (0x0C)*/
 //#define		_SndOn		PORTC_Bit3 = 0
 //#define		_SndOff		PORTC_Bit3 = 1
 
@@ -117,7 +120,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   if(Delay1) --Delay1;
 
   //buttons handle
-  if (!(PINC & 0x20)) 		//press but 2 Cancel
+  if (!(PINC & 0x01)) 		//press but 2 Cancel
   {
     if ((CurCode ^ TmpCode) & MSK_CANCEL)
     {
@@ -128,7 +131,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_CANCEL; CurCode &= ~MSK_CANCEL;}
 
-  if (!(PINC & 0x10)) 		//press turn button
+  if (!(PINB & 0x10)) 		//press turn button
   {
     if ((CurCode ^ TmpCode) & MSK_TURN_BTN)
     {
@@ -139,7 +142,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_TURN_BTN; CurCode &= ~MSK_TURN_BTN;}
 
-  if (!(PINC & 0x80)) 		//press start button
+  if (!(PINB & 0x04)) 		//press start button
   {
     if ((CurCode ^ TmpCode) & MSK_ST_BTN)
     {
@@ -150,7 +153,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_ST_BTN; CurCode &= ~MSK_ST_BTN;}
 
-  if (!(PINC & 0x40)) 		//press but 3 StartTour
+  if (!(PINC & 0x80)) 		//press but 3 StartTour
   {
     if ((CurCode ^ TmpCode) & MSK_ST_TOUR)
     {
@@ -460,6 +463,7 @@ void main(void)
           if (ReadyTimer == 0)
           {
             //PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart tour. send event to start point
+            SndOn(SND_LONG);
             Flags |= (1 << EN_ST_BTN);
             ClrAllDisp();
             Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
@@ -480,9 +484,9 @@ void main(void)
             Result = 0;
             speed = Result;
             //speed = p_event->param0;
-            _CLI();
+            /*_CLI();
             Result = p_event->param0;
-            _SEI();
+            _SEI();*/
             //PostEvent(SOUND, 2, TURN_BTN);
             Flags &= ~(1 << EN_ST_BTN);
           }
@@ -504,7 +508,7 @@ void main(void)
         {
           if (Flags & ( 1 << OUT_OF_BASE))	//was out of base - start the rase
           {
-            SndOn(SND_LONG);
+            SndOn(SND_SHORT);
             ReadyTimer = 150;				//1.5 sec - no reaction on points event
             StateDev = TOUR_ST;
             //speed = Result;
@@ -545,8 +549,9 @@ void main(void)
         }
         if (Flags & (1 << UPDATE_DISP_TIME)) UpdateDispTime(Result);
         if (p_event == NULL) break;
-        if (p_event->cmd == TIME_STAMP)			//event from turn point
+        if ((ReadyTimer == 0) && (p_event->cmd == TIME_STAMP))			//event from turn point
         {
+          ReadyTimer = 150;					//sensless time
           Flags |= 1 << UPDATE_DISP_LAP;
           if (LapNum >= 9)					//if it was the last pass
           {
