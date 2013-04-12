@@ -17,8 +17,10 @@
 #define		TIME_STAMP	0x10
 #define		NUM_PACKET	0x11
 #define		VOLTAGE		0x12
+
 #define		LETTER		0x13
 #define		END_CHAR	0x14
+
 
 typedef struct
 {

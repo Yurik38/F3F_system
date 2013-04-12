@@ -29,7 +29,7 @@
 /* devices address*/
 #define START_BTN	1
 #define TURN_BTN	2
-#define UART3		3
+#define UART_COMP	3	//jury computer
 #define UART4		4
 #define MAIN_DEV	5	//loop addr
 
