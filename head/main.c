@@ -62,6 +62,7 @@ typedef enum
   INIT_ST,
   /*CHECK_START_ST,
   CHECK_TURN_ST,*/
+  WAIT_NAME_ST,
   IDLE_ST,
   READY_TIME_ST,
   TIME_OUT_START_ST,
@@ -95,6 +96,7 @@ uchar volatile	SndTime;
 uchar volatile	Ring;
 uchar volatile	Sound;
 uchar			LastSecondSnd;	//var. Buzzer cnt to end of starting time
+char     NameBuf[16];
 /************************************************************************/
 /*	П Р Е Р Ы В А Н И Я						*/
 /************************************************************************/
@@ -195,7 +197,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
 /************************************************************************/
 /*	Init board */
 /************************************************************************/
-void InitCPU(void)
+void InitCPU()
 {
   PORTA = 0xFE;
   DDRA = 0xFE; //0xFE;
@@ -286,6 +288,7 @@ void KeyHandler(void)
   if (ScanCode & MSK_NEXT)				//but +
   {
     PostEvent(NEXT, 0, MAIN_DEV);
+    PostEvent(NEXT, 0, UART_COMP);
     ScanCode &= ~MSK_NEXT;
   }
 
@@ -300,6 +303,7 @@ void KeyHandler(void)
     PostEvent(CANCEL, 0, MAIN_DEV);
 //    PostEvent(CANCEL, 0, TURN_BTN);
 //    PostEvent(CANCEL, 0, START_BTN);
+    PostEvent(CANCEL, 0, UART_COMP);
     ScanCode &= ~MSK_CANCEL;
   }
 
@@ -350,6 +354,7 @@ void main(void)
   T_EVENT* p_event;
 
   uint speed, tmp;
+  char* name_buf;
 
   InitCPU();
   InitTimers();
@@ -371,9 +376,9 @@ void main(void)
   {
     KeyHandler();
 
-/*    p_event = GetPacket();
+    p_event = GetPacket();
     if (p_event != NULL)
-      PostEvent(p_event->cmd, p_event->param0, p_event->addr);*/
+      PostEvent(p_event->cmd, p_event->param0, p_event->addr);
 
     p_event = GetEvent();
     if (p_event != NULL)
@@ -381,7 +386,7 @@ void main(void)
       if ((p_event->addr > 0) && (p_event->addr < 5))
       {
         //if event not for main device - send it and mark as handled
-        //SendPacket(p_event);
+        SendPacket(p_event);
         p_event = NULL;
       }
     }
@@ -436,7 +441,27 @@ void main(void)
           WriteStr("Взлёт разрешен ");	
         }
         break;*/
-        
+      case WAIT_NAME_ST:
+        if (ReadyTimer == 0)
+        {
+          StateDev = IDLE_ST;
+          break;
+        }
+        if (p_event == NULL) break;
+        if (p_event->cmd == LETTER)
+        {
+          *name_buf = (char)p_event->param0;
+          name_buf++;
+        }
+        else if (p_event->cmd == END_CHAR)
+        {
+          StateDev = IDLE_ST;
+          ClrStrDisp(0);
+          SetCursDisp(0, 0);
+          WriteStr(NameBuf);
+        }
+        break;
+
       case IDLE_ST:				//ready to begin
         if (p_event == NULL) break;
         if (p_event->cmd == START_ROUND)	//event arrived
@@ -450,6 +475,14 @@ void main(void)
           PrintTimeShort(0, ReadyTimer);
           StateDev = READY_TIME_ST;
           SndOn(SND_LONG);
+        }
+        else if (p_event->cmd == LETTER)	//event arrived
+        {
+          memset(NameBuf, 0, 16);
+          NameBuf[0] = p_event->param0;
+          name_ptr = &NameBuf[1];
+          ReadyTimer = 500;
+          StateDev = WAIT_MAME_ST;
         }
         break;
 
@@ -562,6 +595,7 @@ void main(void)
             PostEvent(SOUND, 3, START_BTN);
             PostEvent(CANCEL, 0, TURN_BTN);
             PostEvent(SOUND, 3, TURN_BTN);*/
+            PostEvent(TIME_STAMP, *LapResult, UART_COMP);
             SndOnRing(40);
             StateDev = STOP_ST;
             UpdateDispTime(*LapResult);
