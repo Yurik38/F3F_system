@@ -458,7 +458,7 @@ void main(void)
           StateDev = IDLE_ST;
           ClrStrDisp(0);
           SetCursDisp(0, 0);
-          WriteStr(NameBuf);
+          WriteStr((uchar*)NameBuf);
         }
         break;
 
@@ -480,9 +480,9 @@ void main(void)
         {
           memset(NameBuf, 0, 16);
           NameBuf[0] = p_event->param0;
-          name_ptr = &NameBuf[1];
+          name_buf = &NameBuf[1];
           ReadyTimer = 500;
-          StateDev = WAIT_MAME_ST;
+          StateDev = WAIT_NAME_ST;
         }
         break;
 
