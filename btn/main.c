@@ -166,7 +166,7 @@ __interrupt  void INT0_interrupt(void)
   SendResult = Result;
   _SetF(PRESS_KEY);
   GICR &= ~(1 << INT0);		//Disable ext interrupt
-  UnsensTmr = 120;		//1200mS drebezg protect
+  UnsensTmr = 12;		//120mS drebezg protect
 }
 
 /************************************************************************/
