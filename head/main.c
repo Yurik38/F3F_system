@@ -21,6 +21,7 @@ Fuses
 #include <stdio.h>
 #include <string.h>
 //#include "rf12.h"
+#include "ServMenu.h"
 #include "../common/event.h"
 #include "../common/UART.h"
 
@@ -73,6 +74,9 @@ typedef enum
   TOUR_GO,
   OUT_OF_BASE
 }FLAGS;
+
+__eeprom __no_init uchar eMode;
+__eeprom __no_init uchar eLastSec;
 
 uchar volatile	Flags;
 uchar			LapNum;			//number of passed lap
@@ -344,15 +348,24 @@ void main(void)
   InitUART(1152);
   //  _UART_RX_EN;
   _SEI();
-  LastSecondSnd = 5;
   if (InitDisp() == 0) _LedOn(0);
-
-  SndOn(SND_SHORT_SHORT);
+  if (!(PINC & 0x40)) 		//pressed but 3 StartTour
+  {
+    SndOn(SND_LONG);
+    Service_Menu();
+  }
+  else SndOn(SND_SHORT_SHORT);
   _LedOffAll;
 
   StateDev = INIT_ST;
   LapNum = 0;
   ScanCode = 0;
+  LastSecondSnd = eLastSec;
+
+
+
+  if (eMode == 1) goto training_1;
+  else if (eMode == 2) goto training_2;
 
   for(;;)
   {
@@ -390,7 +403,7 @@ void main(void)
         memset(Results, 0, sizeof(Results));
         ReadyTimer = 0;
         break;
-        
+
       case CHECK_START_ST:
         if (ReadyTimer == 0)
         {
@@ -406,7 +419,7 @@ void main(void)
           ReadyTimer = 0;
         }
         break;
-          
+
       case CHECK_TURN_ST:
         if (ReadyTimer == 0)
         {
@@ -421,7 +434,7 @@ void main(void)
           WriteStr("Взлёт разрешен ");	
         }
         break;
-        
+
       case IDLE_ST:				//ready to begin
         if (p_event == NULL) break;
         if (p_event->cmd == START_ROUND)	//event arrived
@@ -593,5 +606,159 @@ void main(void)
         break;
     }
   }
+
+training_1:
+  for(;;)
+  {
+    KeyHandler();
+
+    p_event = GetPacket();
+    if (p_event != NULL)
+      PostEvent(p_event->cmd, p_event->param0, p_event->addr);
+
+    p_event = GetEvent();
+    if (p_event != NULL)
+    {
+      if ((p_event->addr > 0) && (p_event->addr < 5))
+      {
+        //if event not for main device - send it and mark as handled
+        SendPacket(p_event);
+        p_event = NULL;
+      }
+    }
+
+  //Handle incoming event for main device and update display
+
+
+    switch (StateDev)
+    {
+      case INIT_ST:				//init
+        ClrAllDisp();
+        WriteStr("Тренер 1 вешка");
+        SetCursDisp(1, 0);
+        WriteStr(" Всего пультов 0");
+        StateDev = CHECK_START_ST;
+        Flags = 0;
+        ReadyTimer = 0;
+        break;
+
+      case CHECK_START_ST:
+        if (ReadyTimer == 0)
+        {
+          ReadyTimer = 250;
+          PostEvent(BAT_VOLT_Q, 0, START_BTN);
+        }
+        if (p_event == NULL) break;
+        if (p_event->cmd == VOLTAGE)	//answer from point
+        {
+          StateDev = TOUR_ST;
+          SetCursDisp(1, 15);
+          putchar('1');	
+          ReadyTimer = 0;
+        }
+        break;
+
+      case TOUR_ST:								//Tour is in process
+        if (p_event == NULL) break;
+        if (p_event->cmd == TIME_STAMP)			//event from turn point
+        {
+          SndOn(SND_SHORT);
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+
+training_2:
+  for(;;)
+  {
+    KeyHandler();
+
+    p_event = GetPacket();
+    if (p_event != NULL)
+      PostEvent(p_event->cmd, p_event->param0, p_event->addr);
+
+    p_event = GetEvent();
+    if (p_event != NULL)
+    {
+      if ((p_event->addr > 0) && (p_event->addr < 5))
+      {
+        //if event not for main device - send it and mark as handled
+        SendPacket(p_event);
+        p_event = NULL;
+      }
+    }
+
+  //Handle incoming event for main device and update display
+
+
+    switch (StateDev)
+    {
+      case INIT_ST:				//init
+        ClrAllDisp();
+        WriteStr("Тренер 2 вешки");
+        SetCursDisp(1, 0);
+        WriteStr(" Всего пультов 0");
+        StateDev = CHECK_START_ST;
+        Flags = 0;
+        LapNum = 0;
+        ReadyTimer = 0;
+        break;
+
+      case CHECK_START_ST:
+        if (ReadyTimer == 0)
+        {
+          ReadyTimer = 250;
+          PostEvent(BAT_VOLT_Q, 0, START_BTN);
+        }
+        if (p_event == NULL) break;
+        if (p_event->cmd == VOLTAGE)	//answer from point
+        {
+          StateDev = CHECK_TURN_ST;
+          SetCursDisp(1, 15);
+          putchar('1');	
+          ReadyTimer = 0;
+        }
+        break;
+
+      case CHECK_TURN_ST:
+        if (ReadyTimer == 0)
+        {
+          ReadyTimer = 250;
+          PostEvent(BAT_VOLT_Q, 0, TURN_BTN);
+        }
+        if (p_event == NULL) break;
+        if (p_event->cmd == VOLTAGE)	//answer from point
+        {
+          StateDev = TOUR_ST;
+          SetCursDisp(1, 15);
+          putchar('2');	
+        }
+        break;
+
+      case TOUR_ST:								//Tour is in process
+        if (p_event == NULL) break;
+        if (p_event->cmd == TIME_STAMP)			//event from turn point
+        {
+          if (LapNum & 0x01) 			//turn on "start point" - sound for "turn point"
+          {
+            PostEvent(SOUND, 1, TURN_BTN);
+          }
+          else				//turn on "turn point" - sound for "start point"
+          {
+            PostEvent(SOUND, 1, START_BTN);
+          }
+          SndOn(SND_SHORT);
+          LapNum++;
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
 }
+
 

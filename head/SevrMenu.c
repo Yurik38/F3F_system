@@ -8,10 +8,14 @@
 
 typedef struct
 {
-  flash char* menustr;     		// Строка
+  const char* menustr;     		// Строка
   void   (*func)(void);	  		// Указатель на функцию
 } TSERVMENU;
 
+//from main.c
+extern __eeprom __no_init uchar eMode;
+extern __eeprom __no_init uchar eLastSec;
+void KeyHandler(void);
 
 void Mode_Menu(void);
 void LastSec_Menu(void);
@@ -20,7 +24,7 @@ void LastSec_Menu(void);
 
 TSERVMENU servmenu[] = {
   {"Режим     ", Mode_Menu},
-  {"Сигнал   ", LastSecSnd_Menu},
+  {"Сигнал   ", LastSec_Menu},
 };
 
 /************************************************************************/
@@ -28,14 +32,18 @@ TSERVMENU servmenu[] = {
 /************************************************************************/
 void Service_Menu(void)
 {
-
-uchar  MenuItem;
-uchar  LastSec = eLastSec;
-uchar  Mode = eMode;
+  uchar  MenuItem;
+  T_EVENT *p_event;
 
   MenuItem = 0;
   ClrAllDisp();
-  WriteStr(servmenu[0].menustr);
+  WriteStr((uchar*)servmenu[0].menustr);
+  while (!(PINC & 0x40)); 		//pressed but 3 StartTour
+  KeyHandler();
+  p_event = GetEvent();
+  p_event = NULL;
+
+
   for (;;)
   {
     KeyHandler();
@@ -51,25 +59,27 @@ uchar  Mode = eMode;
       if (p_event->cmd == PREV)			//button "-"
       {
         p_event = NULL;
-        if (MenuItem == 0) MenuItem = MAX_MENU_ITEM;
+        if (MenuItem == 0) MenuItem = MAX_MENU_ITEM - 1;
         else MenuItem--;
-        WriteStr(servmenu[MenuItem].menustr);
+        SetCursDisp(0, 0);
+        WriteStr((uchar*)servmenu[MenuItem].menustr);
       }
       else if (p_event->cmd == NEXT)		//button "+"
       {
         p_event = NULL;
-        if (MenuItem >= MAX_MENU_ITEM) MenuItem = 0;
+        if (MenuItem >= (MAX_MENU_ITEM - 1)) MenuItem = 0;
         else MenuItem++;
-        WriteStr(servmenu[MenuItem].menustr);
+        SetCursDisp(0, 0);
+        WriteStr((uchar*)servmenu[MenuItem].menustr);
       }
       else if (p_event->cmd == START_ROUND)	//enter
       {
         p_event = NULL;
         SetCursDisp(0,15);
-        put_char('*');
+        putchar('*');
         servmenu[MenuItem].func();
         ClrAllDisp();
-        WriteStr(servmenu[MenuItem].menustr);
+        WriteStr((uchar*)servmenu[MenuItem].menustr);
       }
       else if (p_event->cmd == CANCEL)
       {
@@ -86,7 +96,10 @@ void Mode_Menu(void)
 {
   uchar  mode = eMode;
   uchar prn_flag = 1;
+  T_EVENT *p_event;
 
+
+  if (mode > 2) mode = 0;
   for (;;)
   {
     KeyHandler();
@@ -122,9 +135,9 @@ void Mode_Menu(void)
     if (prn_flag)
     {
       prn_flag = 0;
-      ClrStr(1);
+      ClrStrDisp(1);
       SetCursDisp(1,0);
-      switch(Mode)
+      switch(mode)
       {
         case 0:
           WriteStr("Соревнования");
@@ -146,6 +159,7 @@ void LastSec_Menu(void)
 {
   uchar  last_sec = eLastSec;
   uchar prn_flag = 1;
+  T_EVENT *p_event;
 
   if (last_sec > 20) last_sec = 10;
   WriteStr("Кол-во пиков    ");
@@ -185,9 +199,9 @@ void LastSec_Menu(void)
     {
       prn_flag = 0;
       SetCursDisp(1,13);
-      if ((last_sec / 10) != 0) put_char(last_sec/10 + 0x30);
-      else put_char(' ');
-      put_char(last_sec%10 + 0x30);
+      if ((last_sec / 10) != 0) putchar(last_sec/10 + 0x30);
+      else putchar(' ');
+      putchar(last_sec%10 + 0x30);
     }
   }
 }
