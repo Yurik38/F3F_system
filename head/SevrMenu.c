@@ -15,16 +15,20 @@ typedef struct
 //from main.c
 extern __eeprom __no_init uchar eMode;
 extern __eeprom __no_init uchar eLastSec;
+extern __eeprom __no_init uchar eType;
+
 void KeyHandler(void);
 
 void Mode_Menu(void);
 void LastSec_Menu(void);
+void TypeChange_Menu(void);
 
 
 
 TSERVMENU servmenu[] = {
   {"Режим     ", Mode_Menu},
   {"Сигнал   ", LastSec_Menu},
+  {"Тип кнопок", TypeChange_Menu}
 };
 
 /************************************************************************/
@@ -205,3 +209,63 @@ void LastSec_Menu(void)
     }
   }
 }
+
+/************************************************************************/
+void TypeChange_Menu(void)
+{
+  uchar  type = eType;
+  uchar prn_flag = 1;
+  T_EVENT *p_event;
+
+
+  if (type > 1) type = 0;
+  for (;;)
+  {
+    KeyHandler();
+    p_event = GetEvent();
+    if (p_event != NULL)
+    {
+      if (p_event->addr !=  5)
+      {
+          //if event not for main device - mark it as handled
+          p_event = NULL;
+          continue;
+      }
+      if (p_event->cmd == PREV)			//button "-"
+      {
+        p_event = NULL;
+        type = 0;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == NEXT)		//button "+"
+      {
+        p_event = NULL;
+        type = 1;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == CANCEL)
+      {
+        p_event = NULL;
+        eType = type;
+        return;
+      }
+      else p_event = NULL;
+    }
+    if (prn_flag)
+    {
+      prn_flag = 0;
+      ClrStrDisp(1);
+      SetCursDisp(1,0);
+      switch(mode)
+      {
+        case 0:
+          WriteStr("Проводной");
+          break;
+        case 1:
+          WriteStr("Беспроводный");
+          break;
+      }
+    }
+  }
+}
+

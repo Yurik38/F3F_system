@@ -72,11 +72,14 @@ typedef enum
   UPDATE_DISP_TIME,
   UPDATE_DISP_LAP,
   TOUR_GO,
-  OUT_OF_BASE
+  OUT_OF_BASE,
+  EN_ST_BTN
 }FLAGS;
 
 __eeprom __no_init uchar eMode;
 __eeprom __no_init uchar eLastSec;
+__eeprom __no_init uchar eType;
+
 
 uchar volatile	Flags;
 uchar			LapNum;			//number of passed lap
@@ -93,7 +96,9 @@ uchar			StateDev;
 uchar volatile	SndTime;
 uchar volatile	Ring;
 uchar volatile	Sound;
+
 uchar			LastSecondSnd;	//var. Buzzer cnt to end of starting time
+uchar 			Type;
 /************************************************************************/
 /*	П Р Е Р Ы В А Н И Я						*/
 /************************************************************************/
@@ -167,7 +172,29 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_ST_TOUR; CurCode &= ~MSK_ST_TOUR;}
 
-  //Sound controll
+  if (!(PINB & 0x10)) 		//press turn button
+  {
+    if ((CurCode ^ TmpCode) & MSK_TURN_BTN)
+    {
+      CurCode |= MSK_TURN_BTN;
+      ScanCode |= MSK_TURN_BTN;
+    }
+    else TmpCode |= MSK_TURN_BTN;
+  }
+  else {TmpCode &= ~MSK_TURN_BTN; CurCode &= ~MSK_TURN_BTN;}
+
+  if (!(PINB & 0x04)) 		//press start button
+  {
+    if ((CurCode ^ TmpCode) & MSK_ST_BTN)
+    {
+      CurCode |= MSK_ST_BTN;
+      ScanCode |= MSK_ST_BTN;
+    }
+    else TmpCode |= MSK_ST_BTN;
+  }
+  else {TmpCode &= ~MSK_ST_BTN; CurCode &= ~MSK_ST_BTN;}
+
+    //Sound controll
   if (SndTime) SndTime--;
   else if (Ring)
   {
@@ -281,8 +308,11 @@ void KeyHandler(void)
   if (ScanCode & MSK_ST_TOUR)				//tour's begin
   {
     PostEvent(START_ROUND, 0, MAIN_DEV);
-    PostEvent(START_ROUND, 0, TURN_BTN);
-    PostEvent(START_ROUND, 0, START_BTN);
+	if (Type)								//Wireless buttons
+	{
+      PostEvent(START_ROUND, 0, TURN_BTN);
+      PostEvent(START_ROUND, 0, START_BTN);
+	}
     ScanCode &= ~MSK_ST_TOUR;
   }
 
@@ -301,9 +331,24 @@ void KeyHandler(void)
   if (ScanCode & MSK_CANCEL)				//but reset
   {
     PostEvent(CANCEL, 0, MAIN_DEV);
-    PostEvent(CANCEL, 0, TURN_BTN);
-    PostEvent(CANCEL, 0, START_BTN);
+	if (Type)
+	{
+      PostEvent(CANCEL, 0, TURN_BTN);
+      PostEvent(CANCEL, 0, START_BTN);
+	}
     ScanCode &= ~MSK_CANCEL;
+  }
+
+  if (ScanCode & MSK_ST_BTN)				//but start point
+  {
+    if (Flags & (1 << EN_ST_BTN)) PostEvent(TIME_STAMP, Result, MAIN_DEV);
+    ScanCode &= ~MSK_ST_BTN;
+  }
+
+  if (ScanCode & MSK_TURN_BTN)				//but turn point
+  {
+    if (!(Flags & (1 << EN_ST_BTN))) PostEvent(TIME_STAMP, Result, MAIN_DEV);
+    ScanCode &= ~MSK_TURN_BTN;
   }
 }
 
@@ -361,8 +406,7 @@ void main(void)
   LapNum = 0;
   ScanCode = 0;
   LastSecondSnd = eLastSec;
-
-
+  Type = eType;
 
   if (eMode == 1) goto training_1;
   else if (eMode == 2) goto training_2;
@@ -395,8 +439,16 @@ void main(void)
         ClrAllDisp();
         WriteStr(" Система *F3F*");
         SetCursDisp(1, 0);
-        WriteStr(" Всего пультов 0");
-        StateDev = CHECK_START_ST;
+		if (Type)
+		{
+		  WriteStr(" Всего пультов 0");
+          StateDev = CHECK_START_ST;
+		}
+		else
+		{
+          WriteStr("Взлет Разрешен ");
+          StateDev = IDLE_ST;
+		}
         Flags = 0;
         LapNum = 0;
         LapResult = Results;
@@ -451,7 +503,7 @@ void main(void)
         }
         break;
 
-      case READY_TIME_ST:							//time to rase altitude (F3F - 30 sec)
+      case READY_TIME_ST:							//time to raise altitude (F3F - 30 sec)
         if (Flags & (1 << UPDATE_DISP_TIME))	//update ready timer
         {
           Flags &= ~(1 << UPDATE_DISP_TIME);
@@ -460,7 +512,7 @@ void main(void)
           if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
           if (ReadyTimer == 0)
           {
-            PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart tour. send event to start point
+            if (Type) PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. auto-start tour. send event to start point
             ClrAllDisp();
             Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
             StateDev = TIME_OUT_START_ST;	//go to new state
@@ -483,7 +535,7 @@ void main(void)
             _CLI();
             Result = p_event->param0;
             _SEI();
-            PostEvent(SOUND, 2, TURN_BTN);
+            if (Type) PostEvent(SOUND, 2, TURN_BTN);
           }
           else 		//out of base wait event from start point again
           {
@@ -511,7 +563,7 @@ void main(void)
             //_CLI();
             //Result = p_event->param0;
             //_SEI();*/
-            PostEvent(SOUND, 2, TURN_BTN);
+            if (Type) PostEvent(SOUND, 2, TURN_BTN);
           }
           else
           {
@@ -551,11 +603,14 @@ void main(void)
             *LapResult = p_event->param0;		//save time of pass
             Flags &= ~(1 << TOUR_GO);		//clear tour flag and issue event of finish
             //PostEvent(STOP, 0, MAIN_DEV);
-            PostEvent(CANCEL, 0, START_BTN);
-            PostEvent(SOUND, 3, START_BTN);
-            PostEvent(CANCEL, 0, TURN_BTN);
-            PostEvent(SOUND, 3, TURN_BTN);
-            SndOnRing(40);
+            if (Type) 
+			{
+			  PostEvent(CANCEL, 0, START_BTN);
+              PostEvent(SOUND, 3, START_BTN);
+              PostEvent(CANCEL, 0, TURN_BTN);
+              PostEvent(SOUND, 3, TURN_BTN);
+            }
+			SndOnRing(40);
             StateDev = STOP_ST;
             UpdateDispTime(*LapResult);
           }
@@ -568,12 +623,12 @@ void main(void)
               _CLI();
               Result = p_event->param0;		//update sown time
               _SEI();
-              PostEvent(SOUND, 1, TURN_BTN);
+              if (Type) PostEvent(SOUND, 1, TURN_BTN);
             }
             else				//turn on "turn point" - sound for "start point"
             {
               *LapResult = Result;		//save time of pass from main device. turn button result omited
-              PostEvent(SOUND, 1, START_BTN);
+              if (Type) PostEvent(SOUND, 1, START_BTN);
             }
             if (LapNum == 8) SndOn(SND_SHORT_LONG);		//penultimate pass
             else SndOn(SND_SHORT);
