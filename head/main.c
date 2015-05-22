@@ -1,4 +1,7 @@
 /*
+Schematic diagram 	tablo_smpl.sch
+No radio buttons, hardcore and wires only
+
 Quatrz - 11059200 Hz
 Fuses
 		OSCCAL  = AF, AE, A9, AB
@@ -20,7 +23,6 @@ Fuses
 #include "ind2_16.h"
 #include <stdio.h>
 #include <string.h>
-//#include "rf12.h"
 #include "ServMenu.h"
 #include "../common/event.h"
 #include "../common/UART.h"
@@ -35,31 +37,16 @@ Fuses
 #define		SND_SHORT_SHORT	0x02
 #define		SND_SHORT_LONG	0x3E
 
-
-
-
 #define		_mS10		~(432 - 1)  //Prescaller 256
 
-
-/*#define		LEDPORT		PORTC
-#define		_LedOn(p)	LEDPORT &= ~(1 << p)
-#define		_LedOff(p)	LEDPORT |= (1 << p)
-#define		_LedOffAll	LEDPORT |= 0x0F*/
-
-
-#define		_SndOn		PORTD &= ~(0x0C)
-#define		_SndOff		PORTD |= (0x0C)
-//#define		_SndOn		PORTC_Bit3 = 0
-//#define		_SndOff		PORTC_Bit3 = 1
-
-
+#define		_SndOn		PORTD |= 0x30; PORTC &= ~0x02
+#define		_SndOff		PORTD &= ~0x30; PORTC |= 0x02
 
 typedef enum
 {
   INIT_ST,
-  CHECK_START_ST,
-  CHECK_TURN_ST,
   IDLE_ST,
+  LUNCH_TIME_ST,
   READY_TIME_ST,
   TIME_OUT_START_ST,
   TOUR_ST,
@@ -78,7 +65,7 @@ typedef enum
 
 __eeprom __no_init uchar eMode;
 __eeprom __no_init uchar eLastSec;
-__eeprom __no_init uchar eType;
+__eeprom __no_init uchar eLaunchTime;
 
 
 uchar volatile	Flags;
@@ -88,6 +75,7 @@ uint			Results[10];	//table for pass results
 uint			Result;			//current time of tour
 uint			PressTime;
 uint			ReadyTimer;
+uint			LaunchTime;
 uchar			CurCode;		//for buttons handler
 uchar volatile	ScanCode;		
 uchar volatile	TmpCode;
@@ -98,7 +86,6 @@ uchar volatile	Ring;
 uchar volatile	Sound;
 
 uchar			LastSecondSnd;	//var. Buzzer cnt to end of starting time
-uchar 			Type;
 /************************************************************************/
 /*	П Р Е Р Ы В А Н И Я						*/
 /************************************************************************/
@@ -172,7 +159,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_ST_TOUR; CurCode &= ~MSK_ST_TOUR;}
 
-  if (!(PINB & 0x10)) 		//press turn button
+  if (!(PIND & 0x08)) 		//press turn button
   {
     if ((CurCode ^ TmpCode) & MSK_TURN_BTN)
     {
@@ -183,7 +170,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   }
   else {TmpCode &= ~MSK_TURN_BTN; CurCode &= ~MSK_TURN_BTN;}
 
-  if (!(PINB & 0x04)) 		//press start button
+  if (!(PIND & 0x04)) 		//press start button
   {
     if ((CurCode ^ TmpCode) & MSK_ST_BTN)
     {
@@ -211,14 +198,6 @@ __interrupt  void TIMER1_OVF_interrupt(void)
     Sound >>= 1;
   }
   else {_SndOff;}
-  // Morgun controll
-  for (i = 0; i < 4; i++)
-  {
-    p = &LedTime[i];
-    if (*p) (*p)--;
-    else _LedOff(i);
-  }
-
 }
 
 
@@ -271,6 +250,26 @@ inline void SndOnRing(uchar len)
 }
 
 /************************************************************************/
+void Light(uchar color);
+{
+  if (color == GREEN) 
+  {
+    PORTC_Bit3 = 1;
+	PORTC_Bit2 = 0;
+  }
+  else if (color == RED) 
+  {
+    PORTC_Bit3 = 0;
+	PORTC_Bit2 = 1;
+  }
+  else 
+  {
+    PORTC_Bit3 = 0;
+	PORTC_Bit2 = 0;
+  }
+}
+
+/************************************************************************/
 void PrintTime(uchar ten_min, uint timer)
 {
   putchar(ten_min + 0x30);
@@ -302,7 +301,6 @@ void PrintTimeShort(uchar ten_min, uint timer)
 /************************************************************************/
 void KeyHandler(void)
 {
-
   if (!(ScanCode)) return;
 
   if (ScanCode & MSK_ST_TOUR)				//tour's begin
@@ -406,7 +404,7 @@ void main(void)
   LapNum = 0;
   ScanCode = 0;
   LastSecondSnd = eLastSec;
-  Type = eType;
+  LunchTime = 3000;
 
   if (eMode == 1) goto training_1;
   else if (eMode == 2) goto training_2;
@@ -414,11 +412,14 @@ void main(void)
   for(;;)
   {
     KeyHandler();
+	
 
+	//incoming events from RS232
     p_event = GetPacket();
     if (p_event != NULL)
-      PostEvent(p_event->cmd, p_event->param0, p_event->addr);
+	  PostEvent(p_event->cmd, p_event->param0, p_event->addr); //Place event into queue
 
+	//Extract event from queue
     p_event = GetEvent();
     if (p_event != NULL)
     {
@@ -431,24 +432,14 @@ void main(void)
     }
 
   //Handle incoming event for main device and update display
-
-
     switch (StateDev)
     {
       case INIT_ST:				//init
         ClrAllDisp();
         WriteStr(" Система *F3F*");
         SetCursDisp(1, 0);
-		if (Type)
-		{
-		  WriteStr(" Всего пультов 0");
-          StateDev = CHECK_START_ST;
-		}
-		else
-		{
-          WriteStr("Взлет Разрешен ");
-          StateDev = IDLE_ST;
-		}
+        WriteStr(" Готовность\n");
+        StateDev = IDLE_ST;
         Flags = 0;
         LapNum = 0;
         LapResult = Results;
@@ -456,52 +447,67 @@ void main(void)
         ReadyTimer = 0;
         break;
 
-      case CHECK_START_ST:
-        if (ReadyTimer == 0)
-        {
-          ReadyTimer = 250;
-          PostEvent(BAT_VOLT_Q, 0, START_BTN);
-        }
-        if (p_event == NULL) break;
-        if (p_event->cmd == VOLTAGE)	//answer from point
-        {
-          StateDev = CHECK_TURN_ST;
-          SetCursDisp(1, 15);
-          putchar('1');	
-          ReadyTimer = 0;
-        }
-        break;
-
-      case CHECK_TURN_ST:
-        if (ReadyTimer == 0)
-        {
-          ReadyTimer = 250;
-          PostEvent(BAT_VOLT_Q, 0, TURN_BTN);
-        }
-        if (p_event == NULL) break;
-        if (p_event->cmd == VOLTAGE)	//answer from point
-        {
-          StateDev = IDLE_ST;
-          SetCursDisp(1, 1);
-          WriteStr("Взлёт разрешен ");	
-        }
-        break;
-
       case IDLE_ST:				//ready to begin
         if (p_event == NULL) break;
         if (p_event->cmd == START_ROUND)	//event arrived
         {
           _CLI();
-          ReadyTimer = 3000;					//30 second
+          ReadyTimer = LaunchTime;					
           _SEI();
           ClrAllDisp();
-          WriteStr(" Готовность\n");
+          WriteStr("Взлёт разрешен ");
+		  Light(GREEN);
           SetCursDisp(1, 1);
           PrintTimeShort(0, ReadyTimer);
-          StateDev = READY_TIME_ST;
           SndOn(SND_LONG);
+          StateDev = LUNCH_TIME_ST;
         }
         break;
+
+      case LUNCH_TIME_ST:							//time to launch
+        if (Flags & (1 << UPDATE_DISP_TIME))	//update ready timer
+        {
+          Flags &= ~(1 << UPDATE_DISP_TIME);
+          SetCursDisp(1,1);
+          PrintTimeShort(0, ReadyTimer);
+          if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
+          if (ReadyTimer == 0)
+          {
+            if (Type) PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. auto-start tour. send event to start point
+            ClrAllDisp();
+            Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
+            StateDev = TIME_OUT_START_ST;	//go to new state
+            Result = 0;
+          }
+        }
+        if (p_event == NULL) break;				//no event
+        if (p_event->cmd == TIME_STAMP)			//event arrived from strart point
+        {
+          if (Flags & ( 1 << OUT_OF_BASE))	//was out of base - start the rase
+          {
+            ClrAllDisp();
+            Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
+            SndOn(SND_LONG);
+            ReadyTimer = 150;				//1.5 sec no reaction on event
+            StateDev = TOUR_ST;				//tour running
+            //Result = 0;
+            //speed = Result;
+            speed = p_event->param0;
+            _CLI();
+            Result = p_event->param0;
+            _SEI();
+            if (Type) PostEvent(SOUND, 2, TURN_BTN);
+          }
+          else 		//out of base wait event from start point again
+          {
+            Flags |= (1 << OUT_OF_BASE);
+            SndOn(SND_SHORT_SHORT);
+          }
+          break;
+        }
+        if (p_event->cmd == CANCEL) StateDev = INIT_ST;
+        break;
+		
 
       case READY_TIME_ST:							//time to raise altitude (F3F - 30 sec)
         if (Flags & (1 << UPDATE_DISP_TIME))	//update ready timer

@@ -256,7 +256,7 @@ void TypeChange_Menu(void)
       prn_flag = 0;
       ClrStrDisp(1);
       SetCursDisp(1,0);
-      switch(mode)
+      switch(type)
       {
         case 0:
           WriteStr("Проводной");
