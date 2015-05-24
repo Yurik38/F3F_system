@@ -1,6 +1,6 @@
 #ifdef _MAIN
 #include "../head/cpu.h"
-#else 
+#else
 #include "../btn/cpu.h"
 #endif
 #include "event.h"
