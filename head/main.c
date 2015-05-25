@@ -63,10 +63,12 @@ typedef enum
   INIT_ST,
   IDLE_ST,
   LAUNCH_TIME_ST,
+  TIME_OUT_LAUNCH_ST,
   READY_TIME_ST,
   TIME_OUT_START_ST,
   TOUR_ST,
-  STOP_ST
+  STOP_ST,
+  CANCEL_ST
 }DEV_STATE;
 
 
@@ -481,24 +483,16 @@ void main(void)
         if (p_event->cmd == START_ROUND)	//event arrived
         {
           _CLI();
-          ReadyTimer = 3000;					//30 second
+          ReadyTimer = LaunchTime;					//30 second
           _SEI();
           ClrAllDisp();
           WriteStr(" Взлет разрешен\n");
           SetCursDisp(1, 1);
           PrintTimeShort(0, ReadyTimer);
-          StateDev = READY_TIME_ST;
+          StateDev = LAUNCH_TIME_ST;
           SndOn(SND_LONG);
           LedCtrl(GREEN_ON);
         }
-/*        else if (p_event->cmd == LETTER)	//event arrived
-        {
-          memset(NameBuf, 0, 16);
-          NameBuf[0] = p_event->param0;
-          name_buf = &NameBuf[1];
-          ReadyTimer = 500;
-          StateDev = WAIT_NAME_ST;
-        }*/
         break;
 
       case LAUNCH_TIME_ST:							//time to rase altitude (F3F - 30 sec)
@@ -507,46 +501,44 @@ void main(void)
           Flags &= ~(1 << UPDATE_DISP_TIME);
           SetCursDisp(1,1);
           PrintTimeShort(0, ReadyTimer);
-          if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
-          if (ReadyTimer == 0)
+          if (ReadyTimer <= LaunchTime) SndOn(SND_SHORT);	//last second (buzzer)
+          if (ReadyTimer == 0) 
           {
-            //PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart tour. send event to start point
-            SndOn(SND_LONG);
-            Flags |= (1 << EN_ST_BTN);
+            //PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart countdown rise altitude. send event to start point
             ClrAllDisp();
-            Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
-            StateDev = TIME_OUT_START_ST;	//go to new state
-            Result = 0;
+            WriteStr("  Набор высоты\n");
+			ReadyTimer = 3000; 		//30 sec because of F3F rule
+            StateDev = TIME_OUT_LAUNCH_ST;
+            SndOn(SND_LONG);
+            Flags |= (1 << UPDATE_DISP_TIME);
           }
         }
         if (p_event == NULL) break;				//no event
-        if (p_event->cmd == TIME_STAMP)			//event arrived from strart point
+        if (p_event->cmd == START_ROUND)			//event arrived from start point model in air
         {
-          if (Flags & ( 1 << OUT_OF_BASE))	//was out of base - start the rase
-          {
-            ClrAllDisp();
-            Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
-            SndOn(SND_LONG);
-            ReadyTimer = 150;				//1.5 sec no reaction on event
-            StateDev = TOUR_ST;				//tour running
-            Result = 0;
-            speed = Result;
-            //speed = p_event->param0;
-            /*_CLI();
-            Result = p_event->param0;
-            _SEI();*/
-            //PostEvent(SOUND, 2, TURN_BTN);
-            Flags &= ~(1 << EN_ST_BTN);
-          }
-          else 		//out of base wait event from start point again
-          {
-            Flags |= (1 << OUT_OF_BASE);
-            SndOn(SND_SHORT_SHORT);
-          }
+          ClrAllDisp();
+          WriteStr("  Набор высоты\n");
+		  ReadyTimer = 3000; 		//30 sec because of F3F rule
+          StateDev = READY_TIME_ST;
+          SndOn(SND_LONG);
+		  LedCtrl(RED_ON);
+          Flags |= (1 << UPDATE_DISP_TIME);
           break;
         }
-        if (p_event->cmd == CANCEL) StateDev = INIT_ST;
+        if (p_event->cmd == CANCEL) StateDev = CANCEL_ST;
         break;
+		
+      case TIME_OUT_LAUNCH_ST:
+        if (Flags & (1 << UPDATE_DISP_TIME)) UpdateDispTime(Result);
+        if (p_event == NULL) break;				//no event
+        if (p_event->cmd == START_ROUND)			// event arrived from start point
+        {
+          LedCtrl(RED_ON);
+          StateDev = READY_TIME_ST;
+        }
+        if (p_event->cmd == CANCEL) StateDev = CANCEL_ST;
+        break;
+
 
       case READY_TIME_ST:							//time to rase altitude (F3F - 30 sec)
         if (Flags & (1 << UPDATE_DISP_TIME))	//update ready timer
@@ -563,6 +555,7 @@ void main(void)
             ClrAllDisp();
             Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
             StateDev = TIME_OUT_START_ST;	//go to new state
+			
             Result = 0;
           }
         }
@@ -592,7 +585,7 @@ void main(void)
           }
           break;
         }
-        if (p_event->cmd == CANCEL) StateDev = INIT_ST;
+        if (p_event->cmd == CANCEL) StateDev = CANCEL_ST;
         break;
 
       case TIME_OUT_START_ST:
@@ -621,7 +614,7 @@ void main(void)
           }
           break;
         }
-        if (p_event->cmd == CANCEL) StateDev = INIT_ST;
+        if (p_event->cmd == CANCEL) StateDev = CANCEL_ST;
         break;
 
       case TOUR_ST:								//Tour is in process
@@ -682,7 +675,7 @@ void main(void)
           }
           break;
         }
-        if (p_event->cmd == CANCEL) StateDev = INIT_ST;
+        if (p_event->cmd == CANCEL) StateDev = CANCEL_ST;
         break;
 
       case STOP_ST:							//FINISH state
@@ -702,6 +695,18 @@ void main(void)
         }
         if (p_event->cmd == CANCEL) StateDev = INIT_ST;
         break;
+		
+	  case CANCEL_ST:
+	    ClrAllDisp();
+        WriteStr("     Отмена\n");
+	    Delay1 = 150;
+		SndOn(SND_LONG);
+		while (Delay1);
+	    Delay1 = 150;
+		SndOn(SND_LONG);
+		while (Delay1);
+		StateDev = INIT_ST;
+	    break;
       default:
         break;
     }
