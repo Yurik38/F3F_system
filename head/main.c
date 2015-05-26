@@ -42,19 +42,9 @@ Fuses
 #define		_mS10		~(CPU_FREQ/256/100 - 1)  //Prescaller 256
 
 
-/*#define		LEDPORT		PORTC
-#define		_LedOn(p)	LEDPORT &= ~(1 << p)
-#define		_LedOff(p)	LEDPORT |= (1 << p)
-#define		_LedOffAll	LEDPORT |= 0x0F*/
+#define		_SndOn		PORTC_Bit1 = 1; PORTD |= ~0x30
+#define		_SndOff		PORTC_Bit1 = 0; PORTB &= 0x30
 
-
-#define		_SndOn		PORTC_Bit1 = 0; PORTD_Bit5 = 1
-#define		_SndOff		PORTC_Bit1 = 1; PORTB_Bit5 = 0
-
-/*#define		_SndOn		PORTD &= ~(0x0C)
-#define		_SndOff		PORTD |= (0x0C)*/
-//#define		_SndOn		PORTC_Bit3 = 0
-//#define		_SndOff		PORTC_Bit3 = 1
 
 
 
@@ -231,7 +221,7 @@ void InitCPU()
   DDRB = 0xFF;
   PORTC = 0xFF;
   DDRC = 0x0F;
-  PORTD = 0xFF;
+  PORTD = 0x0F;
   DDRD = 0xF3;
 }
 
@@ -423,9 +413,9 @@ void main(void)
   {
     KeyHandler();
 
-    p_event = GetPacket();
+/*    p_event = GetPacket();
     if (p_event != NULL)
-      PostEvent(p_event->cmd, p_event->param0, p_event->addr);
+      PostEvent(p_event->cmd, p_event->param0, p_event->addr);*/
 
     p_event = GetEvent();
     if (p_event != NULL)

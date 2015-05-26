@@ -1,17 +1,9 @@
-#ifdef _MAIN
 #include "../head/cpu.h"
-#else
-#include "../btn/cpu.h"
-#endif
 #include "event.h"
 #include "UART.h"
 
 #define RX_BUF_SIZE		8
 #define TX_BUF_SIZE		8
-
-//#define MAIN_DEV
-
-
 
 extern uchar volatile	Delay1;
 
@@ -24,9 +16,8 @@ uchar	rx_rd_ptr;
 uchar	rx_wr_ptr;
 uchar	UARTBusyFlag;
 
-uchar 	LedTime[NUM_CS];
-uchar	TxID[NUM_CS];
-uchar	RxID[NUM_CS];
+uchar	TxID;
+uchar	RxID;
 
 
 T_EVENT	rx_event;
@@ -85,40 +76,10 @@ void InitUART(uint baud_rate)
 	UCSRA |= (U2X_BIT << U2X);
 	UCSRB = (1 << TXCIE) + (1 << RXCIE) + (1 << TXEN) + (1 << RXEN);
 	UARTBusyFlag = 0;
-	for (i = 0; i < NUM_CS; i++)
-	{
-		TxID[i] = 0;
-		RxID[i] = 0;
+    TxID = 0;
+	RxID = 0;
 	}
 }
-
-/************************************************************************/
-/*Set active device*/
-void SetCS(uchar addr)
-{
-	uchar a;
-
-	a = 0x08 << addr;
-	PORTD &= 0x0F;
-	PORTD |= a;
-}
-
-/************************************************************************/
-/*get active device*/
-uchar GetCS(void)
-{
-	if (PIND & 0x10) return 1;
-	if (PIND & 0x20) return 2;
-	return 3;
-}
-
-/************************************************************************/
-inline void Morgun(uchar led, uchar *tmr)
-{
-	_LedOn(led);
-	*tmr = 20;
-}
-
 
 /************************************************************************/
 void TxBuffer(uchar* FirstByte, uchar Cnt)
@@ -158,30 +119,13 @@ uchar GetByte(uchar *a)
 void SendPacket(T_EVENT* event)
 {
 	uchar i, crc;
-#ifdef _MAIN
     uchar addr;
-#endif
 	uchar *ptr = (uchar*)event;
-	uchar *p_id;
 
 	Delay1 = 5;
 
 	while ((UARTBusyFlag) || (Delay1));
-#ifdef _MAIN
 	addr = event->addr;
-	//++++
-		//for debug only!! always CS = 1
-	//	SetCS(1);
-	SetCS(addr);
-
-	Morgun(addr - 1, &LedTime[addr - 1]);
-	p_id = &TxID[addr-1];
-#else
-	Morgun(6, &LedTime[0]);
-	p_id = &TxID[0];
-#endif
-
-	(*p_id)++;
 	tx_buffer[0] = 0x7E;
 	crc = 0;
 
@@ -191,7 +135,7 @@ void SendPacket(T_EVENT* event)
 		crc += *ptr;
 		ptr++;
 	}
-	tx_buffer[i] = *p_id;
+	tx_buffer[i] = TxID++;
 	crc += tx_buffer[i];
 	i++;
 	tx_buffer[i] = crc;
@@ -239,16 +183,8 @@ T_EVENT* GetPacket(void)
 			case 3://rx crc and check
 				parse_state = 0;
 				if (crc != rx_byte) break;			//CRC mismatch
-#ifdef _MAIN
-				cnt = GetCS();
-				if (RxID[cnt] == cur_ID) break;		//repeat packet
-				RxID[cnt] = cur_ID;
-				Morgun(cnt - 1, &LedTime[cnt - 1]);
-#else
-				if (RxID[0] == cur_ID) break;		//repeat packet
-				RxID[0] = cur_ID;
-				Morgun(6, &LedTime[0]);
-#endif
+				if (RxID == cur_ID) break;		//repeat packet
+				RxID = cur_ID;
 				return &rx_event;
 
 			default:

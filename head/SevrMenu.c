@@ -15,16 +15,19 @@ typedef struct
 //from main.c
 extern __eeprom __no_init uchar eMode;
 extern __eeprom __no_init uchar eLastSec;
+extern __eeprom __no_init uchar eLaunchTime;
 void KeyHandler(void);
 
 void Mode_Menu(void);
 void LastSec_Menu(void);
+void LaunchTime_Menu(void)
 
 
 
 TSERVMENU servmenu[] = {
   {"Режим     ", Mode_Menu},
   {"Сигнал   ", LastSec_Menu},
+  {"Время на старт  ", LaunchTime_Menu}
 };
 
 /************************************************************************/
@@ -202,6 +205,58 @@ void LastSec_Menu(void)
       if ((last_sec / 10) != 0) putchar(last_sec/10 + 0x30);
       else putchar(' ');
       putchar(last_sec%10 + 0x30);
+    }
+  }
+}
+
+/************************************************************************/
+void LaunchTime_Menu(void)
+{
+  uchar  launch_time = eLaunchTime;
+  uchar prn_flag = 1;
+  T_EVENT *p_event;
+
+  if (launch_time > 20) launch_time = 10;
+  WriteStr("Время на запуск ");
+  for (;;)
+  {
+    KeyHandler();
+    p_event = GetEvent();
+    if (p_event != NULL)
+    {
+      if (p_event->addr !=  5)
+      {
+          //if event not for main device - mark it as handled
+          p_event = NULL;
+          continue;
+      }
+      if (p_event->cmd == PREV)			//button "-"
+      {
+        p_event = NULL;
+        if (launch_time != 0) launch_time--;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == NEXT)		//button "+"
+      {
+        p_event = NULL;
+        if (launch_time < 20) launch_time++;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == CANCEL)
+      {
+        p_event = NULL;
+        eLaunchTime = launch_time;
+        return;
+      }
+      else p_event = NULL;
+    }
+    if (prn_flag)
+    {
+      prn_flag = 0;
+      SetCursDisp(1,13);
+      if ((launch_time / 10) != 0) putchar(launch_time/10 + 0x30);
+      else putchar(' ');
+      putchar(launch_time%10 + 0x30);
     }
   }
 }

@@ -14,17 +14,6 @@
 #define	_UART_TX_EN		UCSRB |= (1 << TXEN)
 #define	_UART_TX_DIS		UCSRB &= ~(1 << TXEN)
 
-#ifdef _MAIN
-#define NUM_CS		4
-#define	LEDPORT		PORTC
-#else
-#define NUM_CS		1
-#define LEDPORT		PORTD
-#endif
-
-#define _LedOn(p)	LEDPORT &= ~(1 << p)
-#define _LedOff(p)	LEDPORT |= (1 << p)
-#define _LedOffAll	LEDPORT |= 0x0F
 
 /* devices address*/
 #define START_BTN	1
@@ -35,7 +24,6 @@
 
 
 //uchar extern BusyFlag;
-extern uchar 	LedTime[NUM_CS];
 
 void InitUART(uint baud_rate);
 void TxBuffer(uchar* FirstByte, uchar Cnt);
