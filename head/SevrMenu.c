@@ -213,10 +213,11 @@ void LastSec_Menu(void)
 void LaunchTime_Menu(void)
 {
   uchar  launch_time = eLaunchTime;
+  uchar tmp_prn;
   uchar prn_flag = 1;
   T_EVENT *p_event;
 
-  if (launch_time > 20) launch_time = 10;
+  if (launch_time > 120) launch_time = 120;
   WriteStr("Время на запуск ");
   for (;;)
   {
@@ -233,13 +234,13 @@ void LaunchTime_Menu(void)
       if (p_event->cmd == PREV)			//button "-"
       {
         p_event = NULL;
-        if (launch_time != 0) launch_time--;
+        if (launch_time > 5) launch_time -= 5;
         prn_flag = 1;
       }
       else if (p_event->cmd == NEXT)		//button "+"
       {
         p_event = NULL;
-        if (launch_time < 20) launch_time++;
+        if (launch_time < 120) launch_time += 5;
         prn_flag = 1;
       }
       else if (p_event->cmd == CANCEL)
@@ -254,8 +255,14 @@ void LaunchTime_Menu(void)
     {
       prn_flag = 0;
       SetCursDisp(1,13);
-      if ((launch_time / 10) != 0) putchar(launch_time/10 + 0x30);
-      else putchar(' ');
+	  tmp_prn = launch_time;
+      if ((tmp_prn / 10) > 9)
+      {
+	    putchar('1');
+		tmp_prn = launch_time - 100;
+	  }
+	  else putchar(' ');
+	  putchar(launch_time/10 + 0x30);
       putchar(launch_time%10 + 0x30);
     }
   }
