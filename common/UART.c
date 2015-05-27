@@ -67,7 +67,7 @@ __interrupt void USART_TXC_vector(void)
 /*Инициализация СОМ-порта. BaudRate передается в сотлях. Типа 96 - 9600, 1152 - 115200 и т.д.*/
 void InitUART(uint baud_rate)
 {
-	uchar i, u2x_bit = 0;
+	uchar u2x_bit = 0;
 	uint  ubrr_reg;
 
 	ubrr_reg = (CPU_FREQ/100 * (1 + u2x_bit))/(16 * baud_rate) - 1;
@@ -78,7 +78,7 @@ void InitUART(uint baud_rate)
 	UARTBusyFlag = 0;
     TxID = 0;
 	RxID = 0;
-	}
+	
 }
 
 /************************************************************************/
@@ -119,13 +119,12 @@ uchar GetByte(uchar *a)
 void SendPacket(T_EVENT* event)
 {
 	uchar i, crc;
-    uchar addr;
 	uchar *ptr = (uchar*)event;
 
 	Delay1 = 5;
 
 	while ((UARTBusyFlag) || (Delay1));
-	addr = event->addr;
+//	addr = event->addr;
 	tx_buffer[0] = 0x7E;
 	crc = 0;
 

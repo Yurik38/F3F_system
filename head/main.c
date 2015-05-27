@@ -33,17 +33,17 @@ Fuses
 #define		MSK_TURN_BTN	0x04
 
 #define		SND_SHORT		0x00
-#define		SND_LONG		0x1F
+#define		SND_LONG		0x0F
 #define		SND_SHORT_SHORT	0x02
-#define		SND_SHORT_LONG	0x3E
+#define		SND_SHORT_LONG	0x1E
 
 
 
 #define		_mS10		~(CPU_FREQ/256/100 - 1)  //Prescaller 256
 
 
-#define		_SndOn		PORTC_Bit1 = 1; PORTD |= ~0x30
-#define		_SndOff		PORTC_Bit1 = 0; PORTB &= 0x30
+#define		_SndOn		PORTC_Bit1 = 1; PORTD_Bit5 = 1; PORTD_Bit4 = 0
+#define		_SndOff		PORTC_Bit1 = 0; PORTD_Bit5 = 0; PORTD_Bit4 = 1
 
 
 
@@ -82,25 +82,27 @@ typedef enum
 __eeprom __no_init uchar eMode;
 __eeprom __no_init uchar eLastSec;
 __eeprom __no_init uchar eLaunchTime;
+__eeprom __no_init uchar eTimeFormat;
 
 
 uchar volatile	Flags;
-uchar			LapNum;			//number of passed lap
-uint*			LapResult;		//pointer to current storage cell
-uint			Results[10];	//table for pass results
-uint			Result;			//current time of tour
-uint			PressTime;
-uint			ReadyTimer;
-uchar			CurCode;		//for buttons handler
+uchar		LapNum;			//number of passed lap
+uint*		LapResult;		//pointer to current storage cell
+uint		Results[10];	//table for pass results
+uint		Result;			//current time of tour
+uint		PressTime;
+uint		ReadyTimer;
+uchar		CurCode;		//for buttons handler
 uchar volatile	ScanCode;		
 uchar volatile	TmpCode;
 uchar volatile	Delay1;			//variable for LCD & UART delay
-uchar			StateDev;
+uchar		StateDev;
 uchar volatile	SndTime;
 uchar volatile	Ring;
 uchar volatile	Sound;
-uchar			LastSecondSnd;	//var. Buzzer cnt to end of starting time
-uint 		LaunchTime;
+uchar		LastSecondSnd;	//var. Buzzer cnt to end of starting time
+uchar 		LaunchTime;
+uchar		TimeFormat;
 //char     NameBuf[16];
 /************************************************************************/
 /*	П Р Е Р Ы В А Н И Я						*/
@@ -219,9 +221,9 @@ void InitCPU()
   DDRA = 0xFE; //0xFE;
   PORTB = 0xFF;
   DDRB = 0xFF;
-  PORTC = 0xFF;
+  PORTC = 0xF0;
   DDRC = 0x0F;
-  PORTD = 0x0F;
+  PORTD = 0xFF;
   DDRD = 0xF3;
 }
 
@@ -261,35 +263,50 @@ inline void SndOnRing(uchar len)
 /************************************************************************/
 inline void LedCtrl(LEDCTRL led)
 {
-  if (GREEN_ON)
-  {
-    PORTC_Bit3 = 0;
-    PORTC_Bit2 = 1;
-  }
-  else if (RED_ON)
+  if (led == GREEN_ON)
   {
     PORTC_Bit3 = 1;
     PORTC_Bit2 = 0;
   }
+  else if (led == RED_ON)
+  {
+    PORTC_Bit3 = 0;
+    PORTC_Bit2 = 1;
+  }
   else
   {
-    PORTC_Bit3 = 1;
-    PORTC_Bit2 = 1;
+    PORTC_Bit3 = 0;
+    PORTC_Bit2 = 0;
   }
 }
 
 /************************************************************************/
-void PrintTime(uchar ten_min, uint timer)
+void PrintTime(uint timer)
 {
-  putchar(ten_min + 0x30);
-  putchar(timer / 6000 + 0x30);
-  timer %= 6000;
-  putchar(':');
-  putchar(timer / 1000 + 0x30);
-  timer %= 1000;
-  putchar(timer / 100 + 0x30);
+  if (TimeFormat)
+  {
+    putchar(timer / 6000 + 0x30); //minute
+    timer %= 6000;
+    putchar(':');
+    putchar(timer / 1000 + 0x30);
+    timer %= 1000;
+    putchar(timer / 100 + 0x30);
+    timer %= 100;
+  }
+  else
+  {
+    if (timer > 10000)
+    {
+      putchar(timer / 10000 + 0x30); //hundred of sec
+      timer %= 10000;
+    }
+    else putchar(' ');
+    putchar(timer / 1000 + 0x30);
+    timer %= 1000;
+    putchar(timer / 100 + 0x30);
+    timer %= 100;
+  }
   putchar('.');
-  timer %= 100;
   putchar(timer / 10 + 0x30);
   putchar(timer % 10 + 0x30);
 }
@@ -355,15 +372,14 @@ void KeyHandler(void)
 /************************************************************************/
 void UpdateDispLap(uchar num)
 {
-  Flags &= ~(1 << UPDATE_DISP_LAP);
   if (num > 9) num = 0;
   ClrStrDisp(0);
   SetCursDisp(0,1);
   putchar((num + 1) / 10 + 0x30);
   putchar((num + 1) % 10 + 0x30);
   SetCursDisp(0,8);
-  if (num == 0) PrintTime(0, Results[0]);
-  else PrintTime(0, (Results[num] - Results[num - 1]));
+  if (num == 0) PrintTime(Results[0]);
+  else PrintTime((Results[num] - Results[num - 1]));
 }
 
 /************************************************************************/
@@ -371,9 +387,25 @@ inline void UpdateDispTime(uint time)
 {
   Flags &= ~(1 << UPDATE_DISP_TIME);
   SetCursDisp(1, 8);
-  PrintTime(0, time);		// print current time
+  PrintTime(time);		// print current time
 }
 
+/************************************************************************/
+void UpdatePredictTime(uchar num)
+{
+  ulong tmp;
+
+  if (num > 9) num = 0;
+  ClrStrDisp(1);
+  SetCursDisp(0,1);
+  putchar((num + 1) / 10 + 0x30);
+  putchar((num + 1) % 10 + 0x30);
+  SetCursDisp(1, 0);
+  tmp = Results[num];
+  tmp *= 10;
+  tmp /= (num + 1);
+  PrintTime((uint)tmp);
+}
 
 /************************************************************************/
 /*		M A I N */
@@ -394,21 +426,31 @@ void main(void)
 //  InitUART(1152);
   //  _UART_RX_EN;
   _SEI();
-  LastSecondSnd = eLastSec;
-  LaunchTime = 3000; //eLaunchTime * 100;
   if (InitDisp() == 0) LedCtrl(RED_ON);
+
   if (!(PINC & 0x10)) 		//pressed but 3 StartTour
   {
     SndOn(SND_LONG);
     Service_Menu();
   }
   else SndOn(SND_SHORT_SHORT);
+  Delay1 = 50;
+  while (Delay1);
+  LedCtrl(GREEN_ON);
+  Delay1 = 150;
+  while (Delay1);
+  LedCtrl(RED_ON);
+  Delay1 = 150;
+  while (Delay1);
+  StateDev = INIT_ST;
   LedCtrl(ALL_OFF);
-
+  LastSecondSnd = eLastSec;
+  LaunchTime = eLaunchTime;
+  TimeFormat = 0;//eTimeFormat;
   StateDev = INIT_ST;
   LapNum = 0;
   ScanCode = 0;
-
+  SndOn(SND_SHORT);
   for(;;)
   {
     KeyHandler();
@@ -473,11 +515,11 @@ void main(void)
         if (p_event->cmd == START_ROUND)	//event arrived
         {
           _CLI();
-          ReadyTimer = LaunchTime;					//30 second
+          ReadyTimer = LaunchTime * 100;					//30 second
           _SEI();
           ClrAllDisp();
           WriteStr(" Взлет разрешен\n");
-          SetCursDisp(1, 1);
+          SetCursDisp(1, 5);
           PrintTimeShort(0, ReadyTimer);
           StateDev = LAUNCH_TIME_ST;
           SndOn(SND_LONG);
@@ -489,15 +531,15 @@ void main(void)
         if (Flags & (1 << UPDATE_DISP_TIME))	//update ready timer
         {
           Flags &= ~(1 << UPDATE_DISP_TIME);
-          SetCursDisp(1,1);
+          SetCursDisp(1,5);
           PrintTimeShort(0, ReadyTimer);
           if (ReadyTimer <= LaunchTime) SndOn(SND_SHORT);	//last second (buzzer)
-          if (ReadyTimer == 0) 
+          if (ReadyTimer == 0)
           {
             //PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart countdown rise altitude. send event to start point
             ClrAllDisp();
             WriteStr("  Набор высоты\n");
-			ReadyTimer = 3000; 		//30 sec because of F3F rule
+            ReadyTimer = 3000; 		//30 sec because of F3F rule
             StateDev = TIME_OUT_LAUNCH_ST;
             SndOn(SND_LONG);
             Flags |= (1 << UPDATE_DISP_TIME);
@@ -508,10 +550,10 @@ void main(void)
         {
           ClrAllDisp();
           WriteStr("  Набор высоты\n");
-		  ReadyTimer = 3000; 		//30 sec because of F3F rule
+          ReadyTimer = 3000; 		//30 sec because of F3F rule
           StateDev = READY_TIME_ST;
           SndOn(SND_LONG);
-		  LedCtrl(RED_ON);
+          LedCtrl(RED_ON);
           Flags |= (1 << UPDATE_DISP_TIME);
           break;
         }
@@ -519,7 +561,14 @@ void main(void)
         break;
 		
       case TIME_OUT_LAUNCH_ST:
-        if (Flags & (1 << UPDATE_DISP_TIME)) UpdateDispTime(Result);
+        if (Flags & (1 << UPDATE_DISP_TIME))
+        {
+          Flags &= ~(1 << UPDATE_DISP_TIME);
+          SetCursDisp(1,5);
+          PrintTimeShort(0, ReadyTimer);
+          if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
+          if (ReadyTimer == 0) StateDev = CANCEL_ST;
+        }
         if (p_event == NULL) break;				//no event
         if (p_event->cmd == START_ROUND)			// event arrived from start point
         {
@@ -534,7 +583,7 @@ void main(void)
         if (Flags & (1 << UPDATE_DISP_TIME))	//update ready timer
         {
           Flags &= ~(1 << UPDATE_DISP_TIME);
-          SetCursDisp(1,1);
+          SetCursDisp(1,5);
           PrintTimeShort(0, ReadyTimer);
           if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
           if (ReadyTimer == 0)
@@ -552,7 +601,7 @@ void main(void)
         if (p_event == NULL) break;				//no event
         if (p_event->cmd == TIME_STAMP)			//event arrived from strart point
         {
-          if (Flags & ( 1 << OUT_OF_BASE))	//was out of base - start the rase
+          if (Flags & (1 << OUT_OF_BASE))	//was out of base - start the rase
           {
             ClrAllDisp();
             Flags |= ((1 << UPDATE_DISP_LAP) + (1 << UPDATE_DISP_TIME) + (1 << TOUR_GO));
@@ -579,7 +628,12 @@ void main(void)
         break;
 
       case TIME_OUT_START_ST:
-        if (Flags & (1 << UPDATE_DISP_LAP)) UpdateDispLap(LapNum);
+        if (Flags & (1 << UPDATE_DISP_LAP))
+        {
+          Flags &= ~(1 << UPDATE_DISP_LAP);
+          UpdateDispLap(LapNum);
+
+        }
         if (Flags & (1 << UPDATE_DISP_TIME)) UpdateDispTime(Result);
         if (p_event == NULL) break;				//no event
         if (p_event->cmd == TIME_STAMP)			// event arrived from start point
@@ -621,9 +675,13 @@ void main(void)
             putchar(speed / 10 + 0x30);
             putchar(speed % 10 + 0x30);
             WriteStr("км/ч");
-            Flags &= ~(1 << UPDATE_DISP_LAP);
           }
-          else UpdateDispLap(LapNum - 1);
+          else
+          {
+            UpdateDispLap(LapNum - 1);
+            UpdatePredictTime(LapNum - 1);
+          }
+          Flags &= ~(1 << UPDATE_DISP_LAP);
         }
         if (Flags & (1 << UPDATE_DISP_TIME)) UpdateDispTime(Result);
         if (p_event == NULL) break;
@@ -668,37 +726,41 @@ void main(void)
         if (p_event->cmd == CANCEL) StateDev = CANCEL_ST;
         break;
 
-      case STOP_ST:							//FINISH state
-        if (Flags & (1 << UPDATE_DISP_LAP)) UpdateDispLap(LapNum);
-        if (p_event == NULL) break;
-        if (p_event->cmd == PREV)			//button "-"
-        {
-          if (LapNum) LapNum--;
-          else LapNum = 9;
-          Flags |= (1 << UPDATE_DISP_LAP);
-        }
-        if (p_event->cmd == NEXT)		//button "+"
-        {
-          if (LapNum != 9) LapNum++;
-          else LapNum = 0;
-          Flags |= (1 << UPDATE_DISP_LAP);
-        }
-        if (p_event->cmd == CANCEL) StateDev = INIT_ST;
-        break;
-		
-	  case CANCEL_ST:
-	    ClrAllDisp();
-        WriteStr("     Отмена\n");
-	    Delay1 = 150;
-		SndOn(SND_LONG);
-		while (Delay1);
-	    Delay1 = 150;
-		SndOn(SND_LONG);
-		while (Delay1);
-		StateDev = INIT_ST;
-	    break;
-      default:
-        break;
+    case STOP_ST:							//FINISH state
+      if (Flags & (1 << UPDATE_DISP_LAP))
+      {
+        UpdateDispLap(LapNum);
+        Flags &= ~(1 << UPDATE_DISP_LAP);
+      }
+      if (p_event == NULL) break;
+      if (p_event->cmd == PREV)			//button "-"
+      {
+        if (LapNum) LapNum--;
+        else LapNum = 9;
+        Flags |= (1 << UPDATE_DISP_LAP);
+      }
+      if (p_event->cmd == NEXT)		//button "+"
+      {
+        if (LapNum != 9) LapNum++;
+        else LapNum = 0;
+        Flags |= (1 << UPDATE_DISP_LAP);
+      }
+      if (p_event->cmd == CANCEL) StateDev = INIT_ST;
+      break;
+
+    case CANCEL_ST:
+      ClrAllDisp();
+      WriteStr("     Отмена\n");
+      Delay1 = 150;
+      SndOn(SND_LONG);
+      while (Delay1);
+      Delay1 = 150;
+      SndOn(SND_LONG);
+      while (Delay1);
+      StateDev = INIT_ST;
+      break;
+    default:
+      break;
     }
   }
 }

@@ -20,7 +20,7 @@ void KeyHandler(void);
 
 void Mode_Menu(void);
 void LastSec_Menu(void);
-void LaunchTime_Menu(void)
+void LaunchTime_Menu(void);
 
 
 
@@ -255,15 +255,15 @@ void LaunchTime_Menu(void)
     {
       prn_flag = 0;
       SetCursDisp(1,13);
-	  tmp_prn = launch_time;
+      tmp_prn = launch_time;
       if ((tmp_prn / 10) > 9)
       {
-	    putchar('1');
-		tmp_prn = launch_time - 100;
-	  }
-	  else putchar(' ');
-	  putchar(launch_time/10 + 0x30);
-      putchar(launch_time%10 + 0x30);
+	putchar('1');
+        tmp_prn = launch_time - 100;
+      }
+      else putchar(' ');
+      putchar(tmp_prn/10 + 0x30);
+      putchar(tmp_prn%10 + 0x30);
     }
   }
 }
