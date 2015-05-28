@@ -16,18 +16,23 @@ typedef struct
 extern __eeprom __no_init uchar eMode;
 extern __eeprom __no_init uchar eLastSec;
 extern __eeprom __no_init uchar eLaunchTime;
+extern __eeprom __no_init uchar eTimeFormat;
+
 void KeyHandler(void);
+void PrintTime(uint timer, uchar format);
 
 void Mode_Menu(void);
 void LastSec_Menu(void);
 void LaunchTime_Menu(void);
+void TimeFormat_Menu(void);
 
 
 
 TSERVMENU servmenu[] = {
-  {"Режим     ", Mode_Menu},
-  {"Сигнал   ", LastSec_Menu},
-  {"Время на старт  ", LaunchTime_Menu}
+  {"Режим           ", Mode_Menu},
+  {"Сигнал          ", LastSec_Menu},
+  {"Время на старт  ", LaunchTime_Menu},
+  {"Формат времени  ", TimeFormat_Menu}
 };
 
 /************************************************************************/
@@ -267,3 +272,56 @@ void LaunchTime_Menu(void)
     }
   }
 }
+
+/************************************************************************/
+void Mode_Menu(void)
+{
+  uchar  time_format = eTimeFormat;
+  uchar prn_flag = 1;
+  uint tmp_time = 8438;
+  T_EVENT *p_event;
+
+
+  for (;;)
+  {
+    KeyHandler();
+    p_event = GetEvent();
+    if (p_event != NULL)
+    {
+      if (p_event->addr !=  5)
+      {
+          //if event not for main device - mark it as handled
+          p_event = NULL;
+          continue;
+      }
+      if (p_event->cmd == PREV)			//button "-"
+      {
+        p_event = NULL;
+        time_format = 0;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == NEXT)		//button "+"
+      {
+        p_event = NULL;
+        time_format = 1;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == CANCEL)
+      {
+        p_event = NULL;
+        eTimeFormat = time_format;
+        return;
+      }
+      else p_event = NULL;
+    }
+    if (prn_flag)
+    {
+      prn_flag = 0;
+      ClrStrDisp(1);
+      SetCursDisp(1,0);
+	  PrintTime(tmp_time, time_format);
+    }
+
+  }
+}
+

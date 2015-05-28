@@ -104,6 +104,21 @@ uchar		LastSecondSnd;	//var. Buzzer cnt to end of starting time
 uchar 		LaunchTime;
 uchar		TimeFormat;
 //char     NameBuf[16];
+
+void InitCPU();
+void InitTimers(void);
+void SndOn(uchar mask);
+void SndOnRing(uchar len);
+void LedCtrl(LEDCTRL led);
+void PrintTime(uint timer, uchar format);
+void PrintTimeShort(uchar ten_min, uint timer);
+void KeyHandler(void);
+void UpdateDispLap(uchar num);
+void UpdateDispTime(uint time);
+void UpdatePredictTime(uchar num);
+
+
+
 /************************************************************************/
 /*	Ï Ð Å Ð Û Â À Í È ß						*/
 /************************************************************************/
@@ -241,7 +256,7 @@ void InitTimers(void)
 /************************************************************************/
 /* F U N C T I O N */
 /************************************************************************/
-inline void SndOn(uchar mask)
+void SndOn(uchar mask)
 {
   _CLI();
   Sound = mask;
@@ -251,7 +266,7 @@ inline void SndOn(uchar mask)
 }
 
 /************************************************************************/
-inline void SndOnRing(uchar len)
+void SndOnRing(uchar len)
 {
   _CLI();
   _SndOn;
@@ -261,7 +276,7 @@ inline void SndOnRing(uchar len)
 }
 
 /************************************************************************/
-inline void LedCtrl(LEDCTRL led)
+void LedCtrl(LEDCTRL led)
 {
   if (led == GREEN_ON)
   {
@@ -281,9 +296,9 @@ inline void LedCtrl(LEDCTRL led)
 }
 
 /************************************************************************/
-void PrintTime(uint timer)
+void PrintTime(uint timer, uchar format)
 {
-  if (TimeFormat)
+  if (format)
   {
     putchar(timer / 6000 + 0x30); //minute
     timer %= 6000;
@@ -378,16 +393,16 @@ void UpdateDispLap(uchar num)
   putchar((num + 1) / 10 + 0x30);
   putchar((num + 1) % 10 + 0x30);
   SetCursDisp(0,8);
-  if (num == 0) PrintTime(Results[0]);
-  else PrintTime((Results[num] - Results[num - 1]));
+  if (num == 0) PrintTime(Results[0], TimeFormat);
+  else PrintTime((Results[num] - Results[num - 1]), TimeFormat);
 }
 
 /************************************************************************/
-inline void UpdateDispTime(uint time)
+void UpdateDispTime(uint time)
 {
   Flags &= ~(1 << UPDATE_DISP_TIME);
   SetCursDisp(1, 8);
-  PrintTime(time);		// print current time
+  PrintTime(time, TimeFormat);		// print current time
 }
 
 /************************************************************************/
@@ -395,16 +410,12 @@ void UpdatePredictTime(uchar num)
 {
   ulong tmp;
 
-  if (num > 9) num = 0;
-  ClrStrDisp(1);
-  SetCursDisp(0,1);
-  putchar((num + 1) / 10 + 0x30);
-  putchar((num + 1) % 10 + 0x30);
+  if ((num < 1) || (num > 9) return;
   SetCursDisp(1, 0);
   tmp = Results[num];
   tmp *= 10;
   tmp /= (num + 1);
-  PrintTime((uint)tmp);
+  PrintTime((uint)tmp, TimeFormat);
 }
 
 /************************************************************************/
@@ -638,7 +649,7 @@ void main(void)
         if (p_event == NULL) break;				//no event
         if (p_event->cmd == TIME_STAMP)			// event arrived from start point
         {
-          if (Flags & ( 1 << OUT_OF_BASE))	//was out of base - start the rase
+          if (Flags & ( 1 << OUT_OF_BASE))	//was out of base - start the race
           {
             SndOn(SND_SHORT);
             ReadyTimer = 150;				//1.5 sec - no reaction on points event
