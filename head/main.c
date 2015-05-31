@@ -75,6 +75,7 @@ typedef enum
 {
   GREEN_ON,
   RED_ON,
+  BLINK,
   ALL_OFF
 }LEDCTRL;
 
@@ -103,6 +104,7 @@ uchar volatile	Sound;
 uchar		LastSecondSnd;	//var. Buzzer cnt to end of starting time
 uchar 		LaunchTime;
 uchar		TimeFormat;
+uchar		LedState;
 //char     NameBuf[16];
 
 void InitCPU();
@@ -136,6 +138,7 @@ __interrupt  void TIMER1_OVF_interrupt(void)
   {
     ReadyTimer--;			//ready timer always decrement
     if (!(ReadyTimer % 100)) Flags |= (1 << UPDATE_DISP_TIME);
+    else if ((LedState) && (!(ReadyTimer % 50))) PORTC |= LedState;
   }
 
   if(Delay1) --Delay1;
@@ -282,14 +285,18 @@ void LedCtrl(LEDCTRL led)
   {
     PORTC_Bit3 = 1;
     PORTC_Bit2 = 0;
+    LedState = PINC & 0x00;
   }
   else if (led == RED_ON)
   {
     PORTC_Bit3 = 0;
     PORTC_Bit2 = 1;
+    LedState = PINC & 0x00;
   }
   else
   {
+    if (led == BLINK) LedState = PINC & 0x0C;
+    else LedState = PINC & 0x00;
     PORTC_Bit3 = 0;
     PORTC_Bit2 = 0;
   }
@@ -410,7 +417,7 @@ void UpdatePredictTime(uchar num)
 {
   ulong tmp;
 
-  if ((num < 1) || (num > 9) return;
+  if (num > 9) return;
   SetCursDisp(1, 0);
   tmp = Results[num];
   tmp *= 10;
@@ -424,10 +431,7 @@ void UpdatePredictTime(uchar num)
 
 void main(void)
 {
-
-  //  uint tmp_param;
   T_EVENT* p_event;
-
   uint speed, tmp;
 //  char* name_buf;
 
@@ -445,7 +449,7 @@ void main(void)
     Service_Menu();
   }
   else SndOn(SND_SHORT_SHORT);
-  Delay1 = 50;
+  Delay1 = 80;
   while (Delay1);
   LedCtrl(GREEN_ON);
   Delay1 = 150;
@@ -544,7 +548,7 @@ void main(void)
           Flags &= ~(1 << UPDATE_DISP_TIME);
           SetCursDisp(1,5);
           PrintTimeShort(0, ReadyTimer);
-          if (ReadyTimer <= LaunchTime) SndOn(SND_SHORT);	//last second (buzzer)
+          if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
           if (ReadyTimer == 0)
           {
             //PostEvent(READY_TIME_OUT, 0, START_BTN);				//time expired. autostart countdown rise altitude. send event to start point
@@ -577,7 +581,11 @@ void main(void)
           Flags &= ~(1 << UPDATE_DISP_TIME);
           SetCursDisp(1,5);
           PrintTimeShort(0, ReadyTimer);
-          if (ReadyTimer <= (LastSecondSnd*100)) SndOn(SND_SHORT);	//last second (buzzer)
+          if (ReadyTimer <= (LastSecondSnd*100))
+          {
+            SndOn(SND_SHORT);	//last second (buzzer)
+            LedCtrl(BLINK);
+          }
           if (ReadyTimer == 0) StateDev = CANCEL_ST;
         }
         if (p_event == NULL) break;				//no event
@@ -699,17 +707,27 @@ void main(void)
         if ((ReadyTimer == 0) && (p_event->cmd == TIME_STAMP))			//event from turn point
         {
           ReadyTimer = 150;					//sensless time
-          Flags |= 1 << UPDATE_DISP_LAP;
           if (LapNum >= 9)					//if it was the last pass
           {
             *LapResult = p_event->param0;		//save time of pass
             Flags &= ~(1 << TOUR_GO);		//clear tour flag and issue event of finish
             SndOnRing(40);
             StateDev = STOP_ST;
+            ClrAllDisp();
+            WriteStr("—корость ");
+            speed = 36000 / tmp;
+            putchar(speed / 100 + 0x30);
+            speed %= 100;
+            putchar(speed / 10 + 0x30);
+            putchar(speed % 10 + 0x30);
+            WriteStr("км/ч");
+            SetCursDisp(1, 0);
+            WriteStr("–ез-тат  ");
             UpdateDispTime(*LapResult);
           }
           else					//not last pass
           {
+            Flags |= 1 << UPDATE_DISP_LAP;
             if (LapNum & 0x01) 			//turn on "start point" - sound for "turn point"
             {
 

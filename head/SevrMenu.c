@@ -274,7 +274,7 @@ void LaunchTime_Menu(void)
 }
 
 /************************************************************************/
-void Mode_Menu(void)
+void TimeFormat_Menu(void)
 {
   uchar  time_format = eTimeFormat;
   uchar prn_flag = 1;
