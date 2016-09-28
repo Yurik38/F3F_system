@@ -460,7 +460,7 @@ void main(void)
   LedCtrl(ALL_OFF);
   LastSecondSnd = eLastSec;
   LaunchTime = eLaunchTime;
-  TimeFormat = 0;//eTimeFormat;
+  TimeFormat = eTimeFormat;
   StateDev = INIT_ST;
   LapNum = 0;
   ScanCode = 0;
