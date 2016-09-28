@@ -239,7 +239,8 @@ void LaunchTime_Menu(void)
       if (p_event->cmd == PREV)			//button "-"
       {
         p_event = NULL;
-        if (launch_time > 5) launch_time -= 5;
+        if (launch_time >= 5) launch_time -= 5;
+        else launch_time = 0;
         prn_flag = 1;
       }
       else if (p_event->cmd == NEXT)		//button "+"
@@ -274,7 +275,7 @@ void LaunchTime_Menu(void)
 }
 
 /************************************************************************/
-void Mode_Menu(void)
+void TimeFormat_Menu(void)
 {
   uchar  time_format = eTimeFormat;
   uchar prn_flag = 1;
