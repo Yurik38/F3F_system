@@ -37,20 +37,14 @@ BRST    = 1
 #define		SND_SHORT_SHORT	0x02
 #define		SND_SHORT_LONG	0x1E
 
-
-
 #define		_mS10		~(CPU_FREQ/256/100 - 1)  //Prescaller 256
 
-
-#define		_SndOn		PORTC_Bit1 = 1; PORTD_Bit5 = 1; PORTD_Bit4 = 0
-#define		_SndOff		PORTC_Bit1 = 0; PORTD_Bit5 = 0; PORTD_Bit4 = 1
-
-
-
+#define		_SndOn		{PORTC_Bit1 = 1; PORTD_Bit5 = 1; PORTD_Bit4 = 0}
+#define		_SndOff		{PORTC_Bit1 = 0; PORTD_Bit5 = 0; PORTD_Bit4 = 1}
 
 typedef enum
 {
-  INIT_ST,
+  INIT_ST = 0,
   IDLE_ST,
   LAUNCH_TIME_ST,
   READY_TIME_ST,
@@ -63,7 +57,7 @@ typedef enum
 
 typedef enum
 {
-  UPDATE_DISP_TIME,
+  UPDATE_DISP_TIME = 0,
   UPDATE_DISP_LAP,
   TOUR_GO,
   OUT_OF_BASE,
@@ -78,11 +72,12 @@ typedef enum
   ALL_OFF
 }LEDCTRL;
 
-
 __eeprom __no_init uchar eMode;
 __eeprom __no_init uchar eLastSec;
 __eeprom __no_init uchar eLaunchTime;
 __eeprom __no_init uchar eTimeFormat;
+__eeprom __no_init uchar eWeatherMeter;
+__eeprom __no_init uchar eComputerLink;
 
 
 uchar volatile	Flags;
@@ -95,7 +90,7 @@ uint		ReadyTimer;
 uchar		CurCode;		//for buttons handler
 uchar volatile	ScanCode;		
 uchar volatile	TmpCode;
-uchar volatile	Delay1;			//variable for LCD & UART delay
+uchar volatile	Delay1;		//variable for LCD & UART delay
 uchar		StateDev;
 uchar volatile	SndTime;
 uchar volatile	Ring;
@@ -437,8 +432,7 @@ void main(void)
   InitCPU();
   InitTimers();
   InitEventList();
-  //  InitUART(1152);
-  //  _UART_RX_EN;
+  InitUART(96);
   _SEI();
   if (InitDisp() == 0) LedCtrl(RED_ON);
   
@@ -465,6 +459,7 @@ void main(void)
   LapNum = 0;
   ScanCode = 0;
   SndOn(SND_SHORT);
+  
   for(;;)
   {
     KeyHandler();
@@ -485,8 +480,6 @@ void main(void)
     }
     
     //Handle incoming event for main device and update display
-    
-    
     switch (StateDev)
     {
     case INIT_ST:				//init

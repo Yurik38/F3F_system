@@ -20,7 +20,7 @@ void InitEventList(void)
 }
 
 /************************************************************************/
-void PostEvent(uchar cmd, uint param, uchar addr)
+void PostEvent(T_COMMAND cmd, void* param, uchar addr)
 {
 	wr_event_ptr->addr = addr;
 	wr_event_ptr->cmd = cmd;
@@ -31,12 +31,12 @@ void PostEvent(uchar cmd, uint param, uchar addr)
 /************************************************************************/
 T_EVENT* GetEvent(void)
 {
-	T_EVENT* tmp;
+	T_EVENT* ret;
 
 	if (rd_event_ptr == wr_event_ptr) return NULL;
-	tmp = rd_event_ptr;
+	ret = rd_event_ptr;
 	_IncEventPtr(rd_event_ptr);
-	return tmp;
+	return ret;
 }
 
 /************************************************************************/

@@ -1,11 +1,10 @@
 #include "../head/cpu.h"
+#include "../head/main.h"
 #include "event.h"
 #include "UART.h"
 
 #define RX_BUF_SIZE		8
 #define TX_BUF_SIZE		8
-
-extern uchar volatile	Delay1;
 
 uchar 	tx_cnt;
 uchar	tx_buffer[TX_BUF_SIZE];

@@ -1,4 +1,5 @@
 #include "cpu.h"
+#include "main.h"
 #include "ind2_16.h"
 #include "../common/event.h"
 #include "../common/UART.h"
@@ -12,27 +13,21 @@ typedef struct
   void   (*func)(void);	  		// Указатель на функцию
 } TSERVMENU;
 
-//from main.c
-extern __eeprom __no_init uchar eMode;
-extern __eeprom __no_init uchar eLastSec;
-extern __eeprom __no_init uchar eLaunchTime;
-extern __eeprom __no_init uchar eTimeFormat;
-
-void KeyHandler(void);
-void PrintTime(uint timer, uchar format);
-
 void Mode_Menu(void);
 void LastSec_Menu(void);
 void LaunchTime_Menu(void);
 void TimeFormat_Menu(void);
-
+void WeatherStation_Menu(void);
+void ComputerLink_Menu(void);
 
 
 TSERVMENU servmenu[] = {
   {"Режим           ", Mode_Menu},
   {"Сигнал          ", LastSec_Menu},
   {"Время на старт  ", LaunchTime_Menu},
-  {"Формат времени  ", TimeFormat_Menu}
+  {"Формат времени  ", TimeFormat_Menu},
+  {"Ветромер        ", WeatherStation_Menu},
+  {"Связь с комп-ом ", ComputerLink_Menu},
 };
 
 /************************************************************************/
@@ -46,7 +41,7 @@ void Service_Menu(void)
   MenuItem = 0;
   ClrAllDisp();
   WriteStr((uchar*)servmenu[0].menustr);
-  while (!(PINC & 0x40)); 		//pressed but 3 StartTour
+//  while (!(PINC & 0x40)); 		//pressed but 3 StartTour
   KeyHandler();
   p_event = GetEvent();
   p_event = NULL;
@@ -323,6 +318,104 @@ void TimeFormat_Menu(void)
 	  PrintTime(tmp_time, time_format);
     }
 
+  }
+}
+/************************************************************************/
+void WeatherStation_Menu(void)
+{
+  uchar  weather_station = eWeatherStation;
+  uchar prn_flag = 1;
+  T_EVENT *p_event;
+
+  while(1)
+  {
+    KeyHandler();
+    p_event = GetEvent();
+    if (p_event != NULL)
+    {
+      if (p_event->addr !=  5)
+      {
+          //if event not for main device - mark it as handled
+          p_event = NULL;
+          continue;
+      }
+      if (p_event->cmd == PREV)			//button "-"
+      {
+        p_event = NULL;
+        weather_station = 0;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == NEXT)		//button "+"
+      {
+        p_event = NULL;
+        weather_station = 1;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == CANCEL)
+      {
+        p_event = NULL;
+        eWeatherStation = weather_station;
+        return;
+      }
+      else p_event = NULL;
+    }
+    if (prn_flag)
+    {
+      prn_flag = 0;
+      ClrStrDisp(1);
+      SetCursDisp(1,0);
+	  if (weather_station) WriteStr("Есть");
+	  else WriteStr("Нет");
+    }
+  }
+}
+/************************************************************************/
+void ComputerLink_Menu(void)
+{
+  uchar  computer_link = eComputerLink;
+  uchar prn_flag = 1;
+  T_EVENT *p_event;
+
+  while(1)
+  {
+    KeyHandler();
+    p_event = GetEvent();
+    if (p_event != NULL)
+    {
+      if (p_event->addr !=  5)
+      {
+          //if event not for main device - mark it as handled
+          p_event = NULL;
+          continue;
+      }
+      if (p_event->cmd == PREV)			//button "-"
+      {
+        p_event = NULL;
+        computer_link = 0;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == NEXT)		//button "+"
+      {
+        p_event = NULL;
+        computer_link = 1;
+        prn_flag = 1;
+      }
+      else if (p_event->cmd == CANCEL)
+      {
+        p_event = NULL;
+        eComputerLink = computer_link;
+        return;
+      }
+      else p_event = NULL;
+    }
+    if (prn_flag)
+    {
+      prn_flag = 0;
+      ClrStrDisp(1);
+      SetCursDisp(1,0);
+	  if (computer_link) WriteStr("Есть");
+	  else WriteStr("Нет");
+    }
   }
 }
 
