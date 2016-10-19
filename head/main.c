@@ -18,6 +18,8 @@ BRST    = 1
 
 #include "cpu.h"
 #include "ind2_16.h"
+#include "LedDrv.h"
+#include "SndDrv.h"
 #include <stdio.h>
 #include <string.h>
 //#include "rf12.h"
@@ -32,15 +34,7 @@ BRST    = 1
 #define		MSK_ST_BTN	0x08
 #define		MSK_TURN_BTN	0x04
 
-#define		SND_SHORT		0x00
-#define		SND_LONG		0x0F
-#define		SND_SHORT_SHORT	0x02
-#define		SND_SHORT_LONG	0x1E
-
 #define		_mS10		~(CPU_FREQ/256/100 - 1)  //Prescaller 256
-
-#define		_SndOn		{PORTC_Bit1 = 1; PORTD_Bit5 = 1; PORTD_Bit4 = 0}
-#define		_SndOff		{PORTC_Bit1 = 0; PORTD_Bit5 = 0; PORTD_Bit4 = 1}
 
 typedef enum
 {
@@ -64,14 +58,6 @@ typedef enum
   EN_ST_BTN
 }FLAGS;
 
-typedef enum
-{
-  GREEN_ON,
-  RED_ON,
-  BLINK,
-  ALL_OFF
-}LEDCTRL;
-
 __eeprom __no_init uchar eMode;
 __eeprom __no_init uchar eLastSec;
 __eeprom __no_init uchar eLaunchTime;
@@ -92,20 +78,15 @@ uchar volatile	ScanCode;
 uchar volatile	TmpCode;
 uchar volatile	Delay1;		//variable for LCD & UART delay
 uchar		StateDev;
-uchar volatile	SndTime;
-uchar volatile	Ring;
-uchar volatile	Sound;
 uchar		LastSecondSnd;	//var. Buzzer cnt to end of starting time
 uchar 		LaunchTime;
 uchar		TimeFormat;
-uchar		LedState;
 //char     NameBuf[16];
 
 void InitCPU();
 void InitTimers(void);
 void SndOn(uchar mask);
 void SndOnRing(uchar len);
-void LedCtrl(LEDCTRL led);
 void PrintTime(uint timer, uchar format);
 void PrintTimeShort(uchar ten_min, uint timer);
 void KeyHandler(void);
@@ -252,50 +233,6 @@ void InitTimers(void)
 
 /************************************************************************/
 /* F U N C T I O N */
-/************************************************************************/
-void SndOn(uchar mask)
-{
-  _CLI();
-  Sound = mask;
-  _SndOn;
-  SndTime = 20;
-  _SEI();
-}
-
-/************************************************************************/
-void SndOnRing(uchar len)
-{
-  _CLI();
-  _SndOn;
-  SndTime = 2;
-  Ring = len;
-  _SEI();
-}
-
-/************************************************************************/
-void LedCtrl(LEDCTRL led)
-{
-  if (led == GREEN_ON)
-  {
-    PORTC_Bit3 = 1;
-    PORTC_Bit2 = 0;
-    LedState = PINC & 0x00;
-  }
-  else if (led == RED_ON)
-  {
-    PORTC_Bit3 = 0;
-    PORTC_Bit2 = 1;
-    LedState = PINC & 0x00;
-  }
-  else
-  {
-    if (led == BLINK) LedState = PINC & 0x0C;
-    else LedState = PINC & 0x00;
-    PORTC_Bit3 = 0;
-    PORTC_Bit2 = 0;
-  }
-}
-
 /************************************************************************/
 void PrintTime(uint timer, uchar format)
 {
