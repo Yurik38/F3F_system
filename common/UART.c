@@ -3,7 +3,7 @@
 #include "event.h"
 #include "UART.h"
 
-#define RX_BUF_SIZE		8
+#define RX_BUF_SIZE		4
 #define TX_BUF_SIZE		8
 
 uchar 	tx_cnt;
@@ -14,13 +14,6 @@ uchar	rx_buffer[RX_BUF_SIZE];
 uchar	rx_rd_ptr;
 uchar	rx_wr_ptr;
 uchar	UARTBusyFlag;
-
-uchar	TxID;
-uchar	RxID;
-
-
-T_EVENT	rx_event;
-
 
 /************************************************************************/
 #pragma vector = USART_RXC_vect
@@ -112,88 +105,4 @@ uchar GetByte(uchar *a)
 	*a = rx_buffer[rx_rd_ptr++];
 	if (rx_rd_ptr >= RX_BUF_SIZE) rx_rd_ptr = 0;
 	return 1;
-}
-
-/************************************************************************/
-void SendPacket(T_EVENT* event)
-{
-	uchar i, crc;
-	uchar *ptr = (uchar*)event;
-
-	Delay1 = 5;
-
-	while ((UARTBusyFlag) || (Delay1));
-//	addr = event->addr;
-	tx_buffer[0] = 0x7E;
-	crc = 0;
-
-	for (i = 1; i < sizeof(T_EVENT) + 1; i++)
-	{
-		tx_buffer[i] = *ptr;
-		crc += *ptr;
-		ptr++;
-	}
-	tx_buffer[i] = TxID++;
-	crc += tx_buffer[i];
-	i++;
-	tx_buffer[i] = crc;
-	i++;
-	TxBuffer(tx_buffer, i);
-}
-
-/************************************************************************/
-T_EVENT* GetPacket(void)
-{
-	static uchar parse_state = 0;
-	static uchar crc, cnt, cur_ID;
-	static uchar *buf;
-	uchar rx_byte;
-
-
-	if (GetByte(&rx_byte))
-	{
-		Delay1 = 5;
-		switch (parse_state)
-		{
-			case 0:
-				if (rx_byte == 0x7E)		  //начало пакета
-				{
-					parse_state = 1;
-					crc = 0;
-					cnt = 0;
-					buf = (uchar*)&rx_event;
-				}
-				break;
-
-			case 1://rx event
-				buf[cnt] = rx_byte;
-				crc += rx_byte;
-				cnt++;
-				if (cnt >= sizeof(T_EVENT)) parse_state++;
-				break;
-
-			case 2://rx id
-				cur_ID = rx_byte;
-				crc += rx_byte;
-				parse_state++;
-				break;
-
-			case 3://rx crc and check
-				parse_state = 0;
-				if (crc != rx_byte) break;			//CRC mismatch
-				if (RxID == cur_ID) break;		//repeat packet
-				RxID = cur_ID;
-				return &rx_event;
-
-			default:
-				parse_state = 0;
-				break;
-		}
-	}
-	else
-	{
-		if (parse_state)	//if time expired reset parser
-			if(Delay1 == 0) parse_state = 0;
-	}
-	return NULL;
 }
